@@ -16,6 +16,10 @@ import {
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
+  PaperPlaneIcon,
+  BoxIconLine,
+  DollarLineIcon,
+  DocsIcon,
 } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 
@@ -34,6 +38,26 @@ const navItems: NavItem[] = [
       { name: "Dashboard Home", path: "/dashboard-home", pro: false, new: true },
       { name: "Ecommerce", path: "/", pro: false }
     ],
+  },
+  {
+    icon: <PaperPlaneIcon />,
+    name: "Quotation",
+    path: "/quotation",
+  },
+  {
+    icon: <BoxIconLine />,
+    name: "Order",
+    path: "/order",
+  },
+  {
+    icon: <DocsIcon />,
+    name: "Shipment Tracking",
+    path: "/shipment-tracking",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Payment",
+    path: "/payment",
   },
   {
     icon: <CalenderIcon />,

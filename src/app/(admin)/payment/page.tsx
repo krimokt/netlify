@@ -17,66 +17,66 @@ const paymentData = [
   {
     id: "MES-00001",
     orderId: "MES-00001",
+    amount: "$12,500",
+    method: "Bank Transfer",
+    date: "2023-12-15",
+    status: "Completed",
     client: {
       name: "Acme Industries",
       email: "contact@acme.com"
     },
-    amount: "$12,500",
-    date: "2023-12-15",
-    method: "Bank Transfer",
-    status: "Completed",
     invoiceNo: "INV-2023-001"
   },
   {
     id: "MES-00002",
     orderId: "MES-00002",
+    amount: "$8,750",
+    method: "Bank Transfer",
+    date: "2023-12-18",
+    status: "Completed",
     client: {
       name: "Global Manufacturing",
       email: "orders@globalmanufacturing.com"
     },
-    amount: "$8,750",
-    date: "2023-12-18",
-    method: "Bank Transfer",
-    status: "Completed",
     invoiceNo: "INV-2023-002"
   },
   {
     id: "MES-00003",
     orderId: "MES-00003",
+    amount: "$15,200",
+    method: "Bank Transfer",
+    date: "2023-12-20",
+    status: "Completed",
     client: {
       name: "Tech Solutions Inc.",
       email: "procurement@techsolutions.com"
     },
-    amount: "$15,200",
-    date: "2023-12-20",
-    method: "Bank Transfer",
-    status: "Completed",
     invoiceNo: "INV-2023-003"
   },
   {
     id: "MES-00004",
     orderId: "MES-00004",
+    amount: "$22,500",
+    method: "Bank Transfer",
+    date: "2023-12-22",
+    status: "Pending",
     client: {
       name: "Electron Devices",
       email: "supplies@electrondevices.com"
     },
-    amount: "$22,500",
-    date: "2023-12-22",
-    method: "Bank Transfer",
-    status: "Pending",
     invoiceNo: "INV-2023-004"
   },
   {
     id: "MES-00005",
     orderId: "MES-00005",
+    amount: "$5,800",
+    method: "Bank Transfer",
+    date: "2023-12-25",
+    status: "Rejected",
     client: {
       name: "Construction Partners",
       email: "materials@constructionpartners.com"
     },
-    amount: "$5,800",
-    date: "2023-12-25",
-    method: "Bank Transfer",
-    status: "Rejected",
     invoiceNo: "INV-2023-005"
   }
 ];
@@ -104,6 +104,19 @@ export default function PaymentPage() {
   // Function to handle contact support
   const handleContactSupport = () => {
     window.open('mailto:support@example.com', '_blank');
+  };
+
+  const getStatusBadgeColor = (status: string): "primary" | "success" | "warning" | "info" | "error" => {
+    switch (status) {
+      case "Completed":
+        return "success";
+      case "Pending":
+        return "warning";
+      case "Rejected":
+        return "error";
+      default:
+        return "primary";
+    }
   };
 
   return (
@@ -251,21 +264,20 @@ export default function PaymentPage() {
             </div>
           </div>
 
-          {/* Failed Payments */}
+          {/* Rejected Payments */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
             <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
               <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 9V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M12 17H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M9.17001 4.06L3.82001 10.93C2.75001 12.28 3.81001 14.23 5.48001 14.23H18.51C20.18 14.23 21.25 12.28 20.17 10.93L14.82 4.06C13.73 2.68 10.27 2.68 9.17001 4.06Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 3L14.5 21C14.4605 21.0796 14.4022 21.1474 14.3305 21.1969C14.2588 21.2464 14.1759 21.2761 14.09 21.2831C14.0041 21.29 13.9179 21.2739 13.8405 21.2364C13.763 21.1989 13.6969 21.1412 13.65 21.07L10 14L2.92996 10.35C2.85975 10.3029 2.80213 10.2368 2.76464 10.1594C2.72715 10.0819 2.71091 9.99582 2.71791 9.90992C2.7249 9.82402 2.75454 9.74117 2.80401 9.66948C2.85349 9.59779 2.9213 9.53942 3.00001 9.5L21 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             <div className="mt-5">
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Failed Payments
+                Rejected Payments
               </span>
               <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                3
+                7
               </h4>
             </div>
           </div>
@@ -277,7 +289,7 @@ export default function PaymentPage() {
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
             <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
-              Payment Transactions
+              Payment Management
             </h3>
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
@@ -316,6 +328,7 @@ export default function PaymentPage() {
             </div>
           </div>
 
+          {/* Payment Table */}
           <div className="max-w-full overflow-x-auto">
             <div className="min-w-full">
               <Table>
@@ -338,25 +351,19 @@ export default function PaymentPage() {
                       isHeader
                       className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
                     >
-                      Client
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
                       Amount
                     </TableCell>
                     <TableCell
                       isHeader
                       className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
                     >
-                      Date
+                      Method
                     </TableCell>
                     <TableCell
                       isHeader
                       className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
                     >
-                      Method
+                      Date
                     </TableCell>
                     <TableCell
                       isHeader
@@ -374,92 +381,54 @@ export default function PaymentPage() {
                 </TableHeader>
 
                 {/* Table Body */}
-                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                  {paymentData.map((item) => (
-                    <TableRow 
-                      key={item.id}
-                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                <TableBody>
+                  {paymentData.map((payment, index) => (
+                    <TableRow
+                      key={index}
+                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white"
                     >
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.id}
+                      <TableCell className="px-5 py-3 text-theme-sm">
+                        {payment.id}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.orderId}
+                      <TableCell className="px-5 py-3 text-theme-sm">
+                        {payment.orderId}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{item.client.name}</span>
-                          <span className="text-xs text-gray-500">{item.client.email}</span>
-                        </div>
+                      <TableCell className="px-5 py-3 text-theme-sm font-medium">
+                        {payment.amount}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90 font-medium">
-                        {item.amount}
+                      <TableCell className="px-5 py-3 text-theme-sm">
+                        {payment.method}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.date}
+                      <TableCell className="px-5 py-3 text-theme-sm">
+                        {payment.date}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.method}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
-                        <Badge
-                          size="sm"
-                          color={
-                            item.status === "Completed"
-                              ? "success"
-                              : item.status === "Pending"
-                              ? "warning"
-                              : "error"
-                          }
-                        >
-                          {item.status}
+                      <TableCell className="px-5 py-3 text-theme-sm">
+                        <Badge color={getStatusBadgeColor(payment.status)} size="sm">
+                          {payment.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
+                      <TableCell className="px-5 py-3 text-theme-sm">
                         <div className="flex gap-2">
-                          <button className="p-1 text-[#1E88E5] hover:text-[#0D47A1] rounded-md hover:bg-[#E3F2FD]">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </button>
-                          <button className="p-1 text-[#1E88E5] hover:text-[#0D47A1] rounded-md hover:bg-[#E3F2FD]">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-300"
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-300"
+                          >
+                            Download
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
-          </div>
-          
-          {/* Pagination */}
-          <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-white/[0.05]">
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              Showing 1-5 of 96 items
-            </div>
-            <div className="flex gap-1">
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-700 dark:hover:bg-white/[0.05]" disabled>
-                Previous
-              </button>
-              <button className="px-3 py-1 text-sm rounded-md bg-[#1E88E5] text-white">
-                1
-              </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
-                2
-              </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
-                3
-              </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
-                Next
-              </button>
             </div>
           </div>
         </div>

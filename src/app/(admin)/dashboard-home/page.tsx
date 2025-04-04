@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import React from "react";
 import { 
   ArrowUpIcon, 
@@ -18,11 +17,6 @@ import {
 import Button from "@/components/ui/button/Button";
 import Image from "next/image";
 import ShippingTracking from "@/components/shipping/ShippingTracking";
-
-export const metadata: Metadata = {
-  title: "Dashboard Home | MES Dashboard",
-  description: "Dashboard home page with metrics and quotation requests",
-};
 
 // Sample data for the quotation requests table
 const quotationData = [
@@ -204,7 +198,7 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Recent Quotation Requests Table */}
+      {/* Recent Quotations Requests Table */}
       <div className="col-span-12 lg:col-span-6">
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
@@ -212,9 +206,6 @@ export default function DashboardHome() {
               Recent Quotation Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
-                New Quotation
-              </Button>
               <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
                 View All
               </Button>
@@ -323,9 +314,6 @@ export default function DashboardHome() {
               Recent Orders Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
-                New Order
-              </Button>
               <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
                 View All
               </Button>

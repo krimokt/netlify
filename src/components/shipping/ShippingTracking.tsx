@@ -8,8 +8,8 @@ import Button from "../ui/button/Button";
 const sampleTrackingData: ShippingTrackingItem[] = [
   {
     id: "ship-1",
-    trackingNumber: "TRK93821765",
-    orderNumber: "ORD-5721",
+    trackingNumber: "MES-00001",
+    orderNumber: "MES-00001",
     origin: {
       country: "China",
       name: "Shenzhen"
@@ -26,8 +26,8 @@ const sampleTrackingData: ShippingTrackingItem[] = [
   },
   {
     id: "ship-2",
-    trackingNumber: "TRK75648321",
-    orderNumber: "ORD-5689",
+    trackingNumber: "MES-00002",
+    orderNumber: "MES-00002",
     origin: {
       country: "China",
       name: "Shanghai"
@@ -44,8 +44,8 @@ const sampleTrackingData: ShippingTrackingItem[] = [
   },
   {
     id: "ship-3",
-    trackingNumber: "TRK12453789",
-    orderNumber: "ORD-5432",
+    trackingNumber: "MES-00003",
+    orderNumber: "MES-00003",
     origin: {
       country: "China",
       name: "Guangzhou"
