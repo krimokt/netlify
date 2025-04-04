@@ -262,7 +262,10 @@ export default function DashboardHome() {
                 {/* Table Body */}
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                   {quotationData.slice(0, 3).map((item) => (
-                    <TableRow key={item.id}>
+                    <TableRow 
+                      key={item.id}
+                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                    >
                       <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
                         {item.id}
                       </TableCell>
@@ -370,7 +373,10 @@ export default function DashboardHome() {
                 {/* Table Body */}
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                   {ordersData.map((item) => (
-                    <TableRow key={item.id}>
+                    <TableRow 
+                      key={item.id}
+                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                    >
                       <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
                         {item.id}
                       </TableCell>
