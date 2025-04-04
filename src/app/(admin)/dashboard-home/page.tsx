@@ -261,7 +261,7 @@ export default function DashboardHome() {
 
                 {/* Table Body */}
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                  {quotationData.map((item) => (
+                  {quotationData.slice(0, 3).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
                         {item.id}
