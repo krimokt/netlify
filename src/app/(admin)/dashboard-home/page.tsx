@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import Button from "@/components/ui/button/Button";
 import Image from "next/image";
+import ShippingTracking from "@/components/shipping/ShippingTracking";
 
 export const metadata: Metadata = {
   title: "Dashboard Home | MES Dashboard",
@@ -425,6 +426,11 @@ export default function DashboardHome() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Shipping Tracking Section */}
+      <div className="col-span-12">
+        <ShippingTracking />
       </div>
     </div>
   );
