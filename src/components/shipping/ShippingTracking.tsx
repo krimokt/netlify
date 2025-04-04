@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import ShippingRouteMap, { ShippingRoute } from "./ShippingRouteMap";
 import ShippingTrackingTable, { ShippingTrackingItem } from "./ShippingTrackingTable";

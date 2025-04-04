@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { worldMill } from "@react-jvectormap/world";
 import dynamic from "next/dynamic";
