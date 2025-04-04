@@ -77,6 +77,40 @@ const quotationData = [
   }
 ];
 
+// Sample data for the recent orders requests table
+const ordersData = [
+  {
+    id: "OR-2001",
+    product: {
+      name: "Industrial Valves",
+      image: "/images/product/product-04.jpg"
+    },
+    quantity: "20 units",
+    date: "2023-12-14",
+    status: "Shipped"
+  },
+  {
+    id: "OR-2002",
+    product: {
+      name: "Electric Motors",
+      image: "/images/product/product-05.jpg"
+    },
+    quantity: "10 units",
+    date: "2023-12-17",
+    status: "Processing"
+  },
+  {
+    id: "OR-2003",
+    product: {
+      name: "Control Panels",
+      image: "/images/product/product-01.jpg"
+    },
+    quantity: "5 units",
+    date: "2023-12-19",
+    status: "Delivered"
+  }
+];
+
 export default function DashboardHome() {
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
@@ -84,16 +118,16 @@ export default function DashboardHome() {
       <div className="col-span-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
           {/* Quotation Pending Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-            <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-              <PaperPlaneIcon className="text-gray-800 size-6 dark:text-white/90" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
+              <PaperPlaneIcon className="text-[#0D47A1] size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Quotation Pending
                 </span>
-                <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
                   24
                 </h4>
               </div>
@@ -105,16 +139,16 @@ export default function DashboardHome() {
           </div>
 
           {/* Active Shipments Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-            <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-              <BoxIconLine className="text-gray-800 size-6 dark:text-white/90" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
+              <BoxIconLine className="text-[#0D47A1] size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Active Shipments
                 </span>
-                <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
                   18
                 </h4>
               </div>
@@ -126,16 +160,16 @@ export default function DashboardHome() {
           </div>
 
           {/* Delivered Products Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-            <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-              <GroupIcon className="text-gray-800 size-6 dark:text-white/90" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
+              <GroupIcon className="text-[#0D47A1] size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Delivered Products
                 </span>
-                <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
                   182
                 </h4>
               </div>
@@ -147,16 +181,16 @@ export default function DashboardHome() {
           </div>
 
           {/* Total Spend Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-            <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-              <DollarLineIcon className="text-gray-800 size-6 dark:text-white/90" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
+              <DollarLineIcon className="text-[#0D47A1] size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Total Spend
                 </span>
-                <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
                   $234,500
                 </h4>
               </div>
@@ -170,24 +204,24 @@ export default function DashboardHome() {
       </div>
 
       {/* Recent Quotation Requests Table */}
-      <div className="col-span-12">
+      <div className="col-span-12 lg:col-span-6">
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-gray-800 text-title-md dark:text-white/90">
+            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
               Recent Quotation Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="primary" size="sm">
+              <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
                 New Quotation
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
                 View All
               </Button>
             </div>
           </div>
 
           <div className="max-w-full overflow-x-auto">
-            <div className="min-w-[900px]">
+            <div className="min-w-full">
               <Table>
                 {/* Table Header */}
                 <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
@@ -263,6 +297,116 @@ export default function DashboardHome() {
                               : item.status === "Processing"
                               ? "warning"
                               : "primary"
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Orders Requests Table */}
+      <div className="col-span-12 lg:col-span-6">
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
+            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
+              Recent Orders Requests
+            </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
+                New Order
+              </Button>
+              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
+                View All
+              </Button>
+            </div>
+          </div>
+
+          <div className="max-w-full overflow-x-auto">
+            <div className="min-w-full">
+              <Table>
+                {/* Table Header */}
+                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                  <TableRow>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      ID
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Product
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Quantity
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Date
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Status
+                    </TableCell>
+                  </TableRow>
+                </TableHeader>
+
+                {/* Table Body */}
+                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                  {ordersData.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                        {item.id}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 overflow-hidden rounded-lg">
+                            <Image
+                              width={40}
+                              height={40}
+                              src={item.product.image}
+                              alt={item.product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                            {item.product.name}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                        {item.quantity}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                        {item.date}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start">
+                        <Badge
+                          size="sm"
+                          color={
+                            item.status === "Delivered"
+                              ? "success"
+                              : item.status === "Processing"
+                              ? "warning"
+                              : item.status === "Shipped"
+                              ? "primary"
+                              : "error"
                           }
                         >
                           {item.status}
