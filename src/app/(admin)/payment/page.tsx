@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/table";
 import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
+import { Modal } from "@/components/ui/modal";
+import { CloseIcon } from "@/icons";
+import { useModal } from "@/hooks/useModal";
 
 // Sample payment data
 const paymentData = [
@@ -100,7 +103,7 @@ export default function PaymentPage() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showStatusAlert, setShowStatusAlert] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentDataType | null>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const { isOpen: isPaymentModalOpen, openModal: openPaymentModal, closeModal: closePaymentModal } = useModal();
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,7 +143,7 @@ export default function PaymentPage() {
   // Handle view payment details
   const handleViewPayment = (payment: PaymentDataType) => {
     setSelectedPayment(payment);
-    setShowPaymentModal(true);
+    openPaymentModal();
   };
 
   // Handle bank selection
@@ -520,7 +523,7 @@ export default function PaymentPage() {
                   {paymentData.map((payment, index) => (
                     <TableRow
                       key={index}
-                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white"
+                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
                     >
                       <TableCell className="px-5 py-3 text-theme-sm">
                         {payment.id}
@@ -572,274 +575,237 @@ export default function PaymentPage() {
       </div>
 
       {/* Payment Details Modal */}
-      {showPaymentModal && selectedPayment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-3xl w-full overflow-y-auto max-h-[90vh]">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Payment Details</h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Invoice Number: {selectedPayment.invoiceNo}
-                </p>
-              </div>
-              <button 
-                onClick={() => setShowPaymentModal(false)}
-                className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <div className="border-b pb-3 mb-3">
-                  <p className="text-sm text-gray-500">Payment Information</p>
-                  <div className="mt-2 space-y-2">
-                    <div>
-                      <span className="text-sm font-medium">Payment ID:</span>
-                      <span className="ml-2">{selectedPayment.id}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium">Order ID:</span>
-                      <span className="ml-2">{selectedPayment.orderId}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium">Amount:</span>
-                      <span className="ml-2 text-[#0D47A1] font-medium">{selectedPayment.amount}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium">Method:</span>
-                      <span className="ml-2">{selectedPayment.method}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium">Date:</span>
-                      <span className="ml-2">{selectedPayment.date}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="border-b pb-3">
-                  <p className="text-sm text-gray-500">Status</p>
-                  <div className="mt-2">
-                    <Badge color={getStatusBadgeColor(selectedPayment.status)} size="sm">
+      <Modal
+        isOpen={isPaymentModalOpen}
+        onClose={closePaymentModal}
+        showCloseButton={false}
+        className="max-w-4xl h-auto mx-auto p-0 overflow-hidden"
+      >
+        {selectedPayment && (
+          <div className="relative w-full bg-white dark:bg-gray-900 rounded-3xl animate-fade-in">
+            <div className="p-6 mb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0D47A1] dark:text-white">Payment {selectedPayment.id}</h2>
+                  <div className="flex items-center mt-1">
+                    <span className="text-sm text-gray-500">Invoice: {selectedPayment.invoiceNo}</span>
+                    <span className={`ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedPayment.status === 'Completed' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400'
+                        : selectedPayment.status === 'Pending'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-400'
+                        : 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400'
+                    }`}>
                       {selectedPayment.status}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="border-b pb-3">
-                  <p className="text-sm text-gray-500">Client Information</p>
-                  <div className="mt-2 space-y-2">
-                    <div>
-                      <span className="text-sm font-medium">Client Name:</span>
-                      <span className="ml-2">{selectedPayment.client.name}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium">Client Email:</span>
-                      <span className="ml-2">{selectedPayment.client.email}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Payment ID</div>
-                <div className="font-medium text-[#0D47A1]">{selectedPayment.id}</div>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Invoice Number</div>
-                <div className="font-medium text-[#0D47A1]">{selectedPayment.invoiceNo}</div>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Amount</div>
-                <div className="font-medium text-[#0D47A1]">{selectedPayment.amount}</div>
-              </div>
-            </div>
-
-            {selectedPayment.status === "Pending" && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-4">Payment Methods</h3>
-                <div className="space-y-4">
-                  {/* WISE BANK */}
-                  <div 
-                    className={`border rounded-lg overflow-hidden cursor-pointer ${
-                      selectedBank === 'wise' ? 'border-blue-500 ring-2 ring-blue-500' : ''
-                    }`}
-                    onClick={() => handleBankSelection('wise')}
-                  >
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={selectedBank === 'wise'}
-                          onChange={() => handleBankSelection('wise')}
-                          className="w-4 h-4 text-blue-600 border-gray-300"
-                        />
-                        <div className="ml-2 font-semibold">WISE BANK</div>
-                      </div>
-                    </div>
-                    {selectedBank === 'wise' && (
-                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
-                            <p className="font-medium">MEHDI AMADOUR</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
-                            <p className="font-medium">12345678900</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
-                          <p className="font-medium">GB29 NWBK 6016 1331 9268 19</p>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
-                          <p className="font-medium">TRWIGB22XXX</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SOCIETE GENERALE BANK */}
-                  <div 
-                    className={`border rounded-lg overflow-hidden cursor-pointer ${
-                      selectedBank === 'sg' ? 'border-blue-500 ring-2 ring-blue-500' : ''
-                    }`}
-                    onClick={() => handleBankSelection('sg')}
-                  >
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={selectedBank === 'sg'}
-                          onChange={() => handleBankSelection('sg')}
-                          className="w-4 h-4 text-blue-600 border-gray-300"
-                        />
-                        <div className="ml-2 font-semibold">SOCIETE GENERALE BANK</div>
-                      </div>
-                    </div>
-                    {selectedBank === 'sg' && (
-                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
-                            <p className="font-medium">MEHDI AMADOUR</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
-                            <p className="font-medium">022 987654321 87</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
-                          <p className="font-medium">FR76 3000 6000 0112 3456 7890 123</p>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
-                          <p className="font-medium">SOGEFRPPXXX</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* CIH BANK */}
-                  <div 
-                    className={`border rounded-lg overflow-hidden cursor-pointer ${
-                      selectedBank === 'cih' ? 'border-blue-500 ring-2 ring-blue-500' : ''
-                    }`}
-                    onClick={() => handleBankSelection('cih')}
-                  >
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={selectedBank === 'cih'}
-                          onChange={() => handleBankSelection('cih')}
-                          className="w-4 h-4 text-blue-600 border-gray-300"
-                        />
-                        <div className="ml-2 font-semibold">CIH BANK</div>
-                      </div>
-                    </div>
-                    {selectedBank === 'cih' && (
-                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Intitulé du compte</p>
-                            <p className="font-medium">MEHDI AMADOUR</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Agence du client</p>
-                            <p className="font-medium">BOUSKOURA VILLE VERTE</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mt-3">
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Adresse de votre agence</p>
-                            <p className="font-medium">PROJET BOUSKOURA GOLF CITY- IMM EP 9-CENTRE COMMERCIAL-MAGASIN 7 BOUSKOURA</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Téléphone de votre agence</p>
-                            <p className="font-medium">05 22 88 61 90/93</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">R.I.B.</p>
-                          <p className="font-medium">230 791 4171053210312012 39</p>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">I.B.A.N.</p>
-                          <p className="font-medium">MA64 2307 9141 7105 3211 0312 0139</p>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">B.I.C / SWIFT</p>
-                          <p className="font-medium">CIHMMAMCXXX</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6 text-sm text-gray-600 dark:text-gray-400">
-                  <p>After transferring the payment amount, please provide the transfer receipt to expedite order processing.</p>
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mr-3 border-gray-300"
-                    onClick={() => setShowPaymentModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                  >
-                    Complete Payment
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {selectedPayment.status !== "Pending" && (
-              <div className="mt-6 flex justify-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mr-3 border-gray-300"
-                  onClick={() => setShowPaymentModal(false)}
+                <button 
+                  onClick={closePaymentModal}
+                  className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
                 >
-                  Close
-                </Button>
+                  <CloseIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+              
+            <div className="space-y-6 px-6 mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Information</h3>
+                <div className="grid grid-cols-12 gap-6">
+                  <div className="col-span-12 lg:col-span-4">
+                    <div className="p-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl shadow-sm">
+                      <div className="text-2xl font-bold text-[#0D47A1] dark:text-blue-400">{selectedPayment.amount}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Total Amount</div>
+                    </div>
+                  </div>
+                  <div className="col-span-12 lg:col-span-8">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment ID</span>
+                        <p className="text-gray-800 dark:text-gray-200 font-medium">{selectedPayment.id}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Order ID</span>
+                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.orderId}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment Method</span>
+                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.method}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment Date</span>
+                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.date}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+                
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Client Information</h3>
+                <div className="p-5 bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 rounded-xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Client Name</span>
+                      <p className="text-gray-800 dark:text-gray-200 font-medium">{selectedPayment.client.name}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Client Email</span>
+                      <p className="text-gray-800 dark:text-gray-200">{selectedPayment.client.email}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {selectedPayment.status === "Pending" && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
+                  <div className="mb-4 flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-yellow-700 dark:text-yellow-400">Payment Methods</h3>
+                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Awaiting Payment</span>
+                  </div>
+                  <div className="space-y-4">
+                    {/* WISE BANK */}
+                    <div 
+                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
+                        selectedBank === 'wise' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
+                      }`}
+                      onClick={() => handleBankSelection('wise')}
+                    >
+                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            checked={selectedBank === 'wise'}
+                            onChange={() => handleBankSelection('wise')}
+                            className="w-4 h-4 text-blue-600 border-gray-300"
+                          />
+                          <div className="ml-2 font-semibold">WISE BANK</div>
+                        </div>
+                      </div>
+                      {selectedBank === 'wise' && (
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
+                              <p className="font-medium">MEHDI AMADOUR</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
+                              <p className="font-medium">12345678900</p>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
+                            <p className="font-medium">GB29 NWBK 6016 1331 9268 19</p>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
+                            <p className="font-medium">TRWIGB22XXX</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Other banks (collapsed for brevity) */}
+                    <div 
+                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
+                        selectedBank === 'sg' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
+                      }`}
+                      onClick={() => handleBankSelection('sg')}
+                    >
+                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            checked={selectedBank === 'sg'}
+                            onChange={() => handleBankSelection('sg')}
+                            className="w-4 h-4 text-blue-600 border-gray-300"
+                          />
+                          <div className="ml-2 font-semibold">SOCIETE GENERALE BANK</div>
+                        </div>
+                      </div>
+                      {selectedBank === 'sg' && (
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
+                          {/* Bank details content */}
+                        </div>
+                      )}
+                    </div>
+
+                    <div 
+                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
+                        selectedBank === 'cih' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
+                      }`}
+                      onClick={() => handleBankSelection('cih')}
+                    >
+                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            checked={selectedBank === 'cih'}
+                            onChange={() => handleBankSelection('cih')}
+                            className="w-4 h-4 text-blue-600 border-gray-300"
+                          />
+                          <div className="ml-2 font-semibold">CIH BANK</div>
+                        </div>
+                      </div>
+                      {selectedBank === 'cih' && (
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
+                          {/* Bank details content */}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 text-sm text-yellow-600 dark:text-yellow-500 text-center">
+                    <p>After transferring the payment amount, please provide the transfer receipt to expedite order processing.</p>
+                  </div>
+                </div>
+              )}
+                
+              {selectedPayment.status === "Completed" && (
+                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-6 text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-green-700 dark:text-green-400 font-semibold text-lg mb-2">Payment Completed</p>
+                  <p className="text-sm text-green-600 dark:text-green-500">This payment has been successfully processed and recorded in our system.</p>
+                </div>
+              )}
+                
+              {selectedPayment.status === "Rejected" && (
+                <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <p className="text-red-700 dark:text-red-400 font-semibold text-lg mb-2">Payment Rejected</p>
+                  <p className="text-sm text-red-600 dark:text-red-500 mb-4">This payment could not be processed. Please contact our support team for assistance.</p>
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    onClick={handleContactSupport}
+                  >
+                    Contact Support
+                  </button>
+                </div>
+              )}
+            </div>
+                
+            <div className="flex justify-end gap-3 p-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-gray-300"
+                onClick={closePaymentModal}
+              >
+                Close
+              </Button>
+                  
+              {selectedPayment.status !== "Pending" && (
                 <Button
                   size="sm"
                   className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
@@ -847,11 +813,21 @@ export default function PaymentPage() {
                 >
                   Download Invoice
                 </Button>
-              </div>
-            )}
+              )}
+                  
+              {selectedPayment.status === "Pending" && (
+                <Button
+                  size="sm"
+                  className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
+                  disabled={!selectedBank}
+                >
+                  Complete Payment
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 } 

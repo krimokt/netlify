@@ -1272,7 +1272,7 @@ export default function OrderPage() {
                       key={index}
                       className={`border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white ${
                         order.status === "Processing" ? "bg-blue-50 dark:bg-blue-900/10" : ""
-                      }`}
+                      } transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]`}
                     >
                       <TableCell className="px-5 py-3 text-theme-sm">
                         {order.id}

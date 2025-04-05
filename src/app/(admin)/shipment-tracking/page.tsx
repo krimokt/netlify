@@ -440,7 +440,7 @@ export default function ShipmentTrackingPage() {
                   {filteredShipmentData.map((shipment, index) => (
                     <TableRow
                       key={index}
-                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
                     >
                       <TableCell className="px-5 py-3 text-theme-sm">
                         {shipment.trackingNumber}
