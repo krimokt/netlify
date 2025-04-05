@@ -25,8 +25,9 @@ interface QuotationDetailsProps {
     product: {
       name: string;
       image: string;
-      category: string;
-      description: string;
+      category?: string;
+      description?: string;
+      unitGrossWeight?: string;
     };
     quantity: string;
     date: string;
@@ -185,17 +186,19 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                   </h4>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Category</span>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {quotation.product.category}
-                  </p>
-                </div>
-                <div>
                   <span className="text-sm text-gray-500 dark:text-gray-400">Quantity</span>
                   <p className="text-gray-800 dark:text-gray-200">
                     {quotation.quantity}
                   </p>
                 </div>
+                {quotation.status === "Approved" && quotation.product.unitGrossWeight && (
+                  <div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Unit Gross Weight</span>
+                    <p className="text-gray-800 dark:text-gray-200">
+                      {quotation.product.unitGrossWeight}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <span className="text-sm text-gray-500 dark:text-gray-400">Shipping Method</span>
                   <p className="text-gray-800 dark:text-gray-200">
@@ -208,25 +211,9 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                     {quotation.destination}
                   </p>
                 </div>
-                {quotation.price && quotation.status === "Approved" && (
-                  <div>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Price</span>
-                    <p className="text-green-600 font-semibold dark:text-green-400">
-                      {quotation.price}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
-          {quotation.product.description && (
-            <div className="mt-4">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Description</span>
-              <p className="text-gray-800 dark:text-gray-200 mt-1">
-                {quotation.product.description}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Price Options for Pending or Approved Quotations */}
@@ -364,6 +351,11 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                 </>
               )}
             </div>
+          </div>
+        ) : quotation.status === "Pending" ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
+            <p className="text-yellow-700 dark:text-yellow-400 mb-2 font-medium">Waiting for price options from administrator</p>
+            <p className="text-sm text-yellow-600 dark:text-yellow-500">The administrator is currently preparing price options for this quotation. You will be notified when they are available.</p>
           </div>
         ) : quotation.status === "Waiting" ? (
           <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">

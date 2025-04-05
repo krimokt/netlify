@@ -81,9 +81,27 @@ const paymentData = [
   }
 ];
 
+// Define payment data type
+interface PaymentDataType {
+  id: string;
+  orderId: string;
+  amount: string;
+  method: string;
+  date: string;
+  status: string;
+  client: {
+    name: string;
+    email: string;
+  };
+  invoiceNo: string;
+}
+
 export default function PaymentPage() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showStatusAlert, setShowStatusAlert] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentDataType | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
 
   useEffect(() => {
     // Get status from URL parameter
@@ -117,6 +135,126 @@ export default function PaymentPage() {
       default:
         return "primary";
     }
+  };
+
+  // Handle view payment details
+  const handleViewPayment = (payment: PaymentDataType) => {
+    setSelectedPayment(payment);
+    setShowPaymentModal(true);
+  };
+
+  // Handle bank selection
+  const handleBankSelection = (bank: string) => {
+    setSelectedBank(bank);
+  };
+
+  // Handle download invoice
+  const handleDownloadInvoice = (payment: PaymentDataType) => {
+    // Create a simple invoice content
+    const invoiceContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Invoice ${payment.invoiceNo}</title>
+      <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 40px; color: #333; }
+        .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); }
+        .invoice-box table { width: 100%; line-height: 1.6; text-align: left; }
+        .invoice-box table td { padding: 5px; vertical-align: top; }
+        .invoice-box table tr.top table td { padding-bottom: 20px; }
+        .invoice-box table tr.top table td.title { font-size: 45px; color: #0D47A1; }
+        .invoice-box table tr.information table td { padding-bottom: 40px; }
+        .invoice-box table tr.heading td { background: #eee; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .invoice-box table tr.details td { padding-bottom: 20px; }
+        .invoice-box table tr.item td { border-bottom: 1px solid #eee; }
+        .invoice-box table tr.item.last td { border-bottom: none; }
+        .invoice-box table tr.total td:nth-child(2) { font-weight: bold; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-box">
+        <table cellpadding="0" cellspacing="0">
+          <tr class="top">
+            <td colspan="2">
+              <table>
+                <tr>
+                  <td class="title">
+                    morocco ecom source
+                  </td>
+                  <td class="text-right">
+                    Invoice #: ${payment.invoiceNo}<br>
+                    Payment ID: ${payment.id}<br>
+                    Date: ${payment.date}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <tr class="information">
+            <td colspan="2">
+              <table>
+                <tr>
+                  <td>
+                    MES, Inc.<br>
+                    12345 Business Park<br>
+                    Casablanca, Morocco
+                  </td>
+                  <td class="text-right">
+                    ${payment.client.name}<br>
+                    ${payment.client.email}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <tr class="heading">
+            <td>Payment Method</td>
+            <td class="text-right">Amount</td>
+          </tr>
+          
+          <tr class="details">
+            <td>${payment.method}</td>
+            <td class="text-right">${payment.amount}</td>
+          </tr>
+          
+          <tr class="heading">
+            <td>Item</td>
+            <td class="text-right">Price</td>
+          </tr>
+          
+          <tr class="item">
+            <td>Industrial Equipment Order #${payment.orderId}</td>
+            <td class="text-right">${payment.amount}</td>
+          </tr>
+          
+          <tr class="total">
+            <td></td>
+            <td class="text-right">Total: ${payment.amount}</td>
+          </tr>
+        </table>
+        <div class="text-center" style="margin-top: 40px; color: #888;">
+          <p>Thank you for your business!</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    // Create a blob and download link
+    const blob = new Blob([invoiceContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice-${payment.invoiceNo}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -195,9 +333,6 @@ export default function PaymentPage() {
           <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-white/90">
             Payment Management
           </h1>
-          <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
-            Create New Invoice
-          </Button>
         </div>
       </div>
 
@@ -413,13 +548,15 @@ export default function PaymentPage() {
                             size="sm"
                             variant="outline"
                             className="border-gray-300"
+                            onClick={() => handleViewPayment(payment)}
                           >
-                            View
+                            View Details
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             className="border-gray-300"
+                            onClick={() => handleDownloadInvoice(payment)}
                           >
                             Download
                           </Button>
@@ -433,6 +570,288 @@ export default function PaymentPage() {
           </div>
         </div>
       </div>
+
+      {/* Payment Details Modal */}
+      {showPaymentModal && selectedPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-3xl w-full overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Payment Details</h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Invoice Number: {selectedPayment.invoiceNo}
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <div className="border-b pb-3 mb-3">
+                  <p className="text-sm text-gray-500">Payment Information</p>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <span className="text-sm font-medium">Payment ID:</span>
+                      <span className="ml-2">{selectedPayment.id}</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Order ID:</span>
+                      <span className="ml-2">{selectedPayment.orderId}</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Amount:</span>
+                      <span className="ml-2 text-[#0D47A1] font-medium">{selectedPayment.amount}</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Method:</span>
+                      <span className="ml-2">{selectedPayment.method}</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Date:</span>
+                      <span className="ml-2">{selectedPayment.date}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="border-b pb-3">
+                  <p className="text-sm text-gray-500">Status</p>
+                  <div className="mt-2">
+                    <Badge color={getStatusBadgeColor(selectedPayment.status)} size="sm">
+                      {selectedPayment.status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="border-b pb-3">
+                  <p className="text-sm text-gray-500">Client Information</p>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <span className="text-sm font-medium">Client Name:</span>
+                      <span className="ml-2">{selectedPayment.client.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Client Email:</span>
+                      <span className="ml-2">{selectedPayment.client.email}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="p-4 border border-gray-100 rounded-md">
+                <div className="text-gray-500 text-sm mb-1">Payment ID</div>
+                <div className="font-medium text-[#0D47A1]">{selectedPayment.id}</div>
+              </div>
+              <div className="p-4 border border-gray-100 rounded-md">
+                <div className="text-gray-500 text-sm mb-1">Invoice Number</div>
+                <div className="font-medium text-[#0D47A1]">{selectedPayment.invoiceNo}</div>
+              </div>
+              <div className="p-4 border border-gray-100 rounded-md">
+                <div className="text-gray-500 text-sm mb-1">Amount</div>
+                <div className="font-medium text-[#0D47A1]">{selectedPayment.amount}</div>
+              </div>
+            </div>
+
+            {selectedPayment.status === "Pending" && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-4">Payment Methods</h3>
+                <div className="space-y-4">
+                  {/* WISE BANK */}
+                  <div 
+                    className={`border rounded-lg overflow-hidden cursor-pointer ${
+                      selectedBank === 'wise' ? 'border-blue-500 ring-2 ring-blue-500' : ''
+                    }`}
+                    onClick={() => handleBankSelection('wise')}
+                  >
+                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          checked={selectedBank === 'wise'}
+                          onChange={() => handleBankSelection('wise')}
+                          className="w-4 h-4 text-blue-600 border-gray-300"
+                        />
+                        <div className="ml-2 font-semibold">WISE BANK</div>
+                      </div>
+                    </div>
+                    {selectedBank === 'wise' && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
+                            <p className="font-medium">MEHDI AMADOUR</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
+                            <p className="font-medium">12345678900</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
+                          <p className="font-medium">GB29 NWBK 6016 1331 9268 19</p>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
+                          <p className="font-medium">TRWIGB22XXX</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SOCIETE GENERALE BANK */}
+                  <div 
+                    className={`border rounded-lg overflow-hidden cursor-pointer ${
+                      selectedBank === 'sg' ? 'border-blue-500 ring-2 ring-blue-500' : ''
+                    }`}
+                    onClick={() => handleBankSelection('sg')}
+                  >
+                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          checked={selectedBank === 'sg'}
+                          onChange={() => handleBankSelection('sg')}
+                          className="w-4 h-4 text-blue-600 border-gray-300"
+                        />
+                        <div className="ml-2 font-semibold">SOCIETE GENERALE BANK</div>
+                      </div>
+                    </div>
+                    {selectedBank === 'sg' && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
+                            <p className="font-medium">MEHDI AMADOUR</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
+                            <p className="font-medium">022 987654321 87</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
+                          <p className="font-medium">FR76 3000 6000 0112 3456 7890 123</p>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
+                          <p className="font-medium">SOGEFRPPXXX</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CIH BANK */}
+                  <div 
+                    className={`border rounded-lg overflow-hidden cursor-pointer ${
+                      selectedBank === 'cih' ? 'border-blue-500 ring-2 ring-blue-500' : ''
+                    }`}
+                    onClick={() => handleBankSelection('cih')}
+                  >
+                    <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          checked={selectedBank === 'cih'}
+                          onChange={() => handleBankSelection('cih')}
+                          className="w-4 h-4 text-blue-600 border-gray-300"
+                        />
+                        <div className="ml-2 font-semibold">CIH BANK</div>
+                      </div>
+                    </div>
+                    {selectedBank === 'cih' && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Intitulé du compte</p>
+                            <p className="font-medium">MEHDI AMADOUR</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Agence du client</p>
+                            <p className="font-medium">BOUSKOURA VILLE VERTE</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Adresse de votre agence</p>
+                            <p className="font-medium">PROJET BOUSKOURA GOLF CITY- IMM EP 9-CENTRE COMMERCIAL-MAGASIN 7 BOUSKOURA</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Téléphone de votre agence</p>
+                            <p className="font-medium">05 22 88 61 90/93</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">R.I.B.</p>
+                          <p className="font-medium">230 791 4171053210312012 39</p>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">I.B.A.N.</p>
+                          <p className="font-medium">MA64 2307 9141 7105 3211 0312 0139</p>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">B.I.C / SWIFT</p>
+                          <p className="font-medium">CIHMMAMCXXX</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 text-sm text-gray-600 dark:text-gray-400">
+                  <p>After transferring the payment amount, please provide the transfer receipt to expedite order processing.</p>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mr-3 border-gray-300"
+                    onClick={() => setShowPaymentModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
+                  >
+                    Complete Payment
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectedPayment.status !== "Pending" && (
+              <div className="mt-6 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mr-3 border-gray-300"
+                  onClick={() => setShowPaymentModal(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
+                  onClick={() => handleDownloadInvoice(selectedPayment)}
+                >
+                  Download Invoice
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

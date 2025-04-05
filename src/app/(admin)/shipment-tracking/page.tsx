@@ -170,30 +170,11 @@ const shipmentData: ShipmentTrackingData[] = [
   },
 ];
 
-// Payment method type
-interface PaymentMethod {
-  id: string;
-  name: string;
-  logo: string;
-}
-
-// Sample payment methods
-const paymentMethods: PaymentMethod[] = [
-  { id: "wise", name: "WISE BANK", logo: "/images/logos/wise.png" },
-  { id: "sg", name: "SOCIETE GENERALE BANK", logo: "/images/logos/sg.png" },
-  { id: "cih", name: "CIH BANK", logo: "/images/logos/cih.png" },
-]
-
 export default function ShipmentTrackingPage() {
   const [selectedShipment, setSelectedShipment] = useState<ShipmentTrackingData | null>(null);
   const [filteredShipmentData, setFilteredShipmentData] = useState<ShipmentTrackingData[]>(shipmentData);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   // Effect to check URL parameters for order ID
   useEffect(() => {
@@ -251,56 +232,6 @@ export default function ShipmentTrackingPage() {
     setShowDetailsModal(true);
   };
 
-  // Open payment modal
-  const openPaymentModal = () => {
-    setSelectedPaymentMethod(null);
-    setPaymentSuccess(false);
-    setShowPaymentModal(true);
-  };
-
-  // Handle payment method selection
-  const handlePaymentMethodSelect = (methodId: string) => {
-    setSelectedPaymentMethod(methodId);
-  };
-
-  // Update the function that handles clicking on "Complete Payment"
-  const handleCompletePayment = () => {
-    setShowConfirmationModal(true);
-  };
-
-  // Process payment (moved to confirmation modal)
-  const processPayment = () => {
-    if (!selectedShipment || !selectedPaymentMethod) return;
-    
-    setIsProcessingPayment(true);
-    setShowConfirmationModal(false);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      // Update the shipment's paid status in the local data
-      const updatedShipmentData = filteredShipmentData.map(s => 
-        s.id === selectedShipment.id ? { ...s, isPaid: true } : s
-      );
-      
-      setFilteredShipmentData(updatedShipmentData);
-      
-      // Update the selected shipment if it's still selected
-      if (selectedShipment) {
-        setSelectedShipment({ ...selectedShipment, isPaid: true });
-      }
-      
-      setIsProcessingPayment(false);
-      setPaymentSuccess(true);
-    }, 2000);
-  };
-
-  // Close all modals after successful payment
-  const handlePaymentComplete = () => {
-    setShowPaymentModal(false);
-    setShowDetailsModal(false);
-    setPaymentSuccess(false);
-  };
-
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       {/* Page Header Section */}
@@ -327,22 +258,6 @@ export default function ShipmentTrackingPage() {
                   Tracking Number: {selectedShipment.trackingNumber}
                 </p>
               </div>
-
-              {selectedShipment.status === "Delivered" && !selectedShipment.isPaid && (
-                <Button
-                  size="sm"
-                  className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                  onClick={openPaymentModal}
-                >
-                  Pay Now
-                </Button>
-              )}
-              
-              {selectedShipment.isPaid && (
-                <Badge color="success" size="sm">
-                  Payment Completed
-                </Badge>
-              )}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -413,173 +328,6 @@ export default function ShipmentTrackingPage() {
         )}
       </Modal>
 
-      {/* Payment Modal */}
-      <Modal
-        isOpen={showPaymentModal}
-        onClose={() => !isProcessingPayment && setShowPaymentModal(false)}
-        className="max-w-xl p-8 mx-4 md:mx-auto"
-      >
-        {selectedShipment && !paymentSuccess && !isProcessingPayment && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6">
-              Complete Your Payment
-            </h2>
-            
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium">Order Summary</p>
-                <p className="text-gray-500 text-sm">#{selectedShipment.orderId}</p>
-              </div>
-              
-              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
-                <div className="relative h-16 w-16 overflow-hidden rounded-md flex-shrink-0">
-                  <Image
-                    src={selectedShipment.product.image}
-                    alt={selectedShipment.product.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="flex-grow">
-                  <h4 className="font-medium">{selectedShipment.product.name}</h4>
-                  <p className="text-sm text-gray-500">Delivered: {selectedShipment.dates.delivered}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">${selectedShipment.price?.toLocaleString()}</p>
-                </div>
-              </div>
-              
-              <div className="flex justify-between font-medium border-t border-gray-200 pt-4 dark:border-gray-700">
-                <p>Total Payment</p>
-                <p className="text-[#0D47A1]">${selectedShipment.price?.toLocaleString()}</p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <p className="font-medium mb-3">Select Payment Method</p>
-              <div className="grid grid-cols-1 gap-3">
-                {paymentMethods.map(method => (
-                  <div 
-                    key={method.id}
-                    onClick={() => handlePaymentMethodSelect(method.id)}
-                    className={`flex items-center gap-3 border p-3 rounded-lg cursor-pointer transition-all ${
-                      selectedPaymentMethod === method.id 
-                        ? 'border-[#1E88E5] bg-blue-50 dark:bg-blue-900/20' 
-                        : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'
-                    }`}
-                  >
-                    <div className="h-10 w-10 relative flex-shrink-0">
-                      <Image
-                        src={method.logo}
-                        alt={method.name}
-                        width={40}
-                        height={40}
-                        className="object-contain"
-                      />
-                    </div>
-                    <div className="flex-grow">
-                      <p className="font-medium">{method.name}</p>
-                    </div>
-                    <div className="h-5 w-5 rounded-full border border-gray-300 flex items-center justify-center">
-                      {selectedPaymentMethod === method.id && (
-                        <div className="h-3 w-3 rounded-full bg-[#1E88E5]"></div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex justify-end">
-              <Button
-                size="md"
-                className={`bg-[#1E88E5] hover:bg-[#0D47A1] text-white ${
-                  !selectedPaymentMethod ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                onClick={handleCompletePayment}
-                disabled={!selectedPaymentMethod}
-              >
-                Complete Payment
-              </Button>
-            </div>
-          </div>
-        )}
-        
-        {isProcessingPayment && (
-          <div className="text-center py-6">
-            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Processing Payment</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Please wait while we process your payment...
-            </p>
-          </div>
-        )}
-        
-        {paymentSuccess && (
-          <div className="text-center py-6">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Payment Successful!</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Thank you for your payment. Your transaction was successful.
-            </p>
-            <Button
-              size="md"
-              className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-              onClick={handlePaymentComplete}
-            >
-              Done
-            </Button>
-          </div>
-        )}
-      </Modal>
-
-      {/* Add the new Confirmation Modal */}
-      <Modal
-        isOpen={showConfirmationModal}
-        onClose={() => !isProcessingPayment && setShowConfirmationModal(false)}
-        className="max-w-md p-6 mx-4 md:mx-auto"
-      >
-        {selectedShipment && (
-          <div className="text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Confirm Payment</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Are you sure you want to process payment of <span className="font-bold text-[#0D47A1]">${selectedShipment.price?.toLocaleString()}</span> for order #{selectedShipment.orderId}?
-            </p>
-            <div className="flex justify-center gap-4">
-              <Button
-                size="md"
-                variant="outline"
-                className="border-gray-300"
-                onClick={() => setShowConfirmationModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="md"
-                className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                onClick={processPayment}
-              >
-                Confirm Payment
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
       {/* Main Table Section */}
       <div className="col-span-12">
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
@@ -620,9 +368,7 @@ export default function ShipmentTrackingPage() {
                   />
                 </svg>
               </div>
-              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
-                Export
-              </Button>
+
             </div>
           </div>
 
@@ -637,6 +383,12 @@ export default function ShipmentTrackingPage() {
                       className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
                     >
                       Tracking Number
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                    >
+                      Order ID
                     </TableCell>
                     <TableCell
                       isHeader
@@ -694,6 +446,9 @@ export default function ShipmentTrackingPage() {
                         {shipment.trackingNumber}
                       </TableCell>
                       <TableCell className="px-5 py-3 text-theme-sm">
+                        {shipment.orderId}
+                      </TableCell>
+                      <TableCell className="px-5 py-3 text-theme-sm">
                         <div className="flex items-center gap-3">
                           <div className="relative h-10 w-10 overflow-hidden rounded-lg">
                             <Image
@@ -705,7 +460,6 @@ export default function ShipmentTrackingPage() {
                           </div>
                           <div>
                             <div className="font-medium">{shipment.product.name}</div>
-                            <div className="text-xs text-gray-500">Order: {shipment.orderId}</div>
                           </div>
                         </div>
                       </TableCell>
@@ -731,11 +485,6 @@ export default function ShipmentTrackingPage() {
                         <Badge color={getStatusBadgeColor(shipment.status)} size="sm">
                           {shipment.status}
                         </Badge>
-                        {shipment.isPaid && shipment.status === "Delivered" && (
-                          <Badge color="success" size="sm">
-                            Paid
-                          </Badge>
-                        )}
                       </TableCell>
                       <TableCell className="px-5 py-3 text-theme-sm">
                         <div className="flex flex-col">
@@ -757,18 +506,6 @@ export default function ShipmentTrackingPage() {
                           >
                             View Details
                           </Button>
-                          {shipment.status === "Delivered" && !shipment.isPaid && (
-                            <Button
-                              size="sm"
-                              className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                              onClick={() => {
-                                viewShipmentDetails(shipment);
-                                setTimeout(() => openPaymentModal(), 100);
-                              }}
-                            >
-                              Pay Now
-                            </Button>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>

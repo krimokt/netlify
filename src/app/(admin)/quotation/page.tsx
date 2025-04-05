@@ -41,7 +41,8 @@ interface QuotationData {
     name: string;
     image: string;
     category: string;
-    description: string;
+    description?: string;
+    unitGrossWeight?: string;
   };
   quantity: string;
   date: string;
@@ -80,31 +81,9 @@ const quotationData: QuotationData[] = [
     quantity: "200 units",
     date: "2024-03-12",
     status: "Pending",
-    price: "Waiting for prices from supplier",
     shippingMethod: "Air Freight",
     destination: "Berlin, Germany",
-    priceOptions: [
-      { 
-        id: "price1", 
-        price: "$12,500", 
-        supplier: "Premium Machinery Co.", 
-        deliveryTime: "4-6 weeks",
-        description: "High quality parts with extended warranty"
-      },
-      { 
-        id: "price2", 
-        price: "$10,800", 
-        supplier: "Industrial Components Ltd.", 
-        deliveryTime: "5-7 weeks" 
-      },
-      { 
-        id: "price3", 
-        price: "$9,650", 
-        supplier: "Global Manufacturing Solutions", 
-        deliveryTime: "6-8 weeks",
-        description: "Standard quality with regular warranty" 
-      }
-    ]
+    priceOptions: [] // Empty like Industrial Water Pump
   },
   {
     id: "QT-2024-003",
@@ -112,7 +91,8 @@ const quotationData: QuotationData[] = [
       name: "Electric Motors",
       image: productImages[2],
       category: "Electrical Components",
-      description: "High-efficiency electric motors for various industrial applications."
+      description: "High-efficiency electric motors for various industrial applications.",
+      unitGrossWeight: "45 kg per unit" // Add Unit Gross Weight for approved items
     },
     quantity: "30 units",
     date: "2024-03-15",
@@ -156,7 +136,7 @@ const quotationData: QuotationData[] = [
       name: "Solar Panels",
       image: productImages[3],
       category: "Renewable Energy",
-      description: "High-efficiency solar panels with 25-year warranty."
+      unitGrossWeight: "22 kg per panel" // Add Unit Gross Weight for approved items
     },
     quantity: "100 units",
     date: "2024-03-18",
@@ -171,29 +151,13 @@ const quotationData: QuotationData[] = [
       name: "Conveyor Systems",
       image: productImages[4],
       category: "Material Handling",
-      description: "Industrial conveyor systems for warehouse and manufacturing facilities."
     },
     quantity: "5 units",
     date: "2024-03-20",
     status: "Pending",
-    price: "Waiting for prices from supplier",
     shippingMethod: "Train Freight",
     destination: "Paris, France",
-    priceOptions: [
-      { 
-        id: "price1", 
-        price: "$18,300", 
-        supplier: "European Logistics Ltd.", 
-        deliveryTime: "3-5 weeks" 
-      },
-      { 
-        id: "price2", 
-        price: "$16,750", 
-        supplier: "Global Transport Solutions", 
-        deliveryTime: "4-6 weeks",
-        description: "Includes installation support" 
-      }
-    ]
+    priceOptions: [] // Empty like Industrial Water Pump
   }
 ];
 

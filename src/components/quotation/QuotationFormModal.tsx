@@ -128,7 +128,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFormData(prev => ({
       ...prev,
-      productImages: acceptedFiles,
+      productImages: [...prev.productImages, ...acceptedFiles],
     }));
   }, []);
 
@@ -141,6 +141,14 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
       "image/svg+xml": [],
     },
   });
+
+  // Add a function to remove an image by index
+  const removeImage = (indexToRemove: number) => {
+    setFormData(prev => ({
+      ...prev,
+      productImages: prev.productImages.filter((_, index) => index !== indexToRemove),
+    }));
+  };
 
   // Navigate to next step
   const nextStep = () => {
@@ -302,18 +310,35 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
                 </div>
                 
                 {formData.productImages.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {formData.productImages.map((file, index) => (
-                      <div key={index} className="relative w-16 h-16 overflow-hidden rounded-md">
-                        <Image
-                          src={URL.createObjectURL(file)}
-                          alt={`Product image ${index + 1}`}
-                          width={64}
-                          height={64}
-                          className="object-cover w-full h-full"
-                        />
-                      </div>
-                    ))}
+                  <div className="mt-4">
+                    <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Uploaded Images ({formData.productImages.length})
+                    </label>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      {formData.productImages.map((file, index) => (
+                        <div key={index} className="relative w-24 h-24 overflow-hidden rounded-md group">
+                          <Image
+                            src={URL.createObjectURL(file)}
+                            alt={`Product image ${index + 1}`}
+                            fill
+                            className="object-cover w-full h-full"
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeImage(index);
+                            }}
+                            className="absolute top-1 right-1 p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          >
+                            <CloseIcon className="w-3 h-3" />
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-gray-800 bg-opacity-70 text-white text-xs py-1 px-2 truncate">
+                            {file.name.substring(0, 15)}{file.name.length > 15 ? '...' : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
