@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import { 
   ArrowUpIcon, 
   BoxIconLine, 
@@ -17,6 +19,8 @@ import {
 import Button from "@/components/ui/button/Button";
 import Image from "next/image";
 import ShippingTracking from "@/components/shipping/ShippingTracking";
+import QuotationFormModal from "@/components/quotation/QuotationFormModal";
+import { useRouter } from "next/navigation";
 
 // Sample data for the quotation requests table
 const quotationData = [
@@ -107,6 +111,17 @@ const ordersData = [
 ];
 
 export default function DashboardHome() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter();
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
+  
+  // Navigation functions
+  const goToQuotationsPage = () => router.push('/quotation');
+  const goToOrdersPage = () => router.push('/order');
+  const goToShipmentTrackingPage = () => router.push('/shipment-tracking');
+  
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       {/* Metric Cards Section */}
@@ -206,7 +221,20 @@ export default function DashboardHome() {
               Recent Quotation Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
+              <Button 
+                variant="primary" 
+                size="sm" 
+                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+                onClick={openModal}
+              >
+                Create New Quote
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                onClick={goToQuotationsPage}
+              >
                 View All
               </Button>
             </div>
@@ -314,7 +342,12 @@ export default function DashboardHome() {
               Recent Orders Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                onClick={goToOrdersPage}
+              >
                 View All
               </Button>
             </div>
@@ -418,8 +451,32 @@ export default function DashboardHome() {
 
       {/* Shipping Tracking Section */}
       <div className="col-span-12">
-        <ShippingTracking />
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
+            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
+              Shipment Tracking
+            </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button 
+                variant="primary" 
+                size="sm" 
+                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+                onClick={goToShipmentTrackingPage}
+              >
+                View All Shipments
+              </Button>
+            </div>
+          </div>
+
+          {/* Tracking Table */}
+          <div className="px-5 pb-6">
+            <ShippingTracking />
+          </div>
+        </div>
       </div>
+
+      {/* Quotation Form Modal */}
+      <QuotationFormModal isOpen={isModalOpen} onClose={closeModal} />
     </div>
   );
 } 
