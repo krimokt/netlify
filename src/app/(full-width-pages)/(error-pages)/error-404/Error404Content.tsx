@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import React from "react";
 
-export default function NotFound() {
+export default function Error404Content() {
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen p-6 overflow-hidden z-1">
       <GridShape />
@@ -46,4 +46,4 @@ export default function NotFound() {
       </p>
     </div>
   );
-}
+} 

@@ -20,20 +20,29 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     // This code will only run on the client side
-    const savedTheme = localStorage.getItem("theme") as Theme | null;
-    const initialTheme = savedTheme || "light"; // Default to light theme
+    try {
+      const savedTheme = localStorage.getItem("theme") as Theme | null;
+      const initialTheme = savedTheme || "light"; // Default to light theme
 
-    setTheme(initialTheme);
+      setTheme(initialTheme);
+    } catch (error) {
+      console.error("Error accessing localStorage:", error);
+    }
+    
     setIsInitialized(true);
   }, []);
 
   useEffect(() => {
     if (isInitialized) {
-      localStorage.setItem("theme", theme);
-      if (theme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
+      try {
+        localStorage.setItem("theme", theme);
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch (error) {
+        console.error("Error setting theme in localStorage:", error);
       }
     }
   }, [theme, isInitialized]);
