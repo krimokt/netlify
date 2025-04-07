@@ -10,7 +10,7 @@ import {
   CheckCircleIcon 
 } from "@/icons";
 import { useDropzone } from "react-dropzone";
-import emojiFlags from 'emoji-flags';
+import { countries as countryCodes } from 'country-flag-icons';
 
 // Shipping methods based on destination region
 const getShippingMethods = (region: string) => {
@@ -20,6 +20,16 @@ const getShippingMethods = (region: string) => {
     methods.push("Train Freight");
   }
   return methods;
+};
+
+// Helper function to get emoji flag from country code
+const getCountryEmoji = (countryCode: string): string => {
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  
+  return String.fromCodePoint(...codePoints);
 };
 
 // Type for country data
@@ -51,12 +61,12 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
   });
   
   useEffect(() => {
-    // Map emoji-flags data to our format
-    const countryList = emojiFlags.data.map((country) => ({
-      code: country.code.toLowerCase(),
-      name: country.name,
-      emoji: country.emoji,
-      region: getRegionForCountry(country.code)
+    // Generate country list from country codes
+    const countryList: CountryData[] = countryCodes.map((code) => ({
+      code: code.toLowerCase(),
+      name: new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code,
+      emoji: getCountryEmoji(code),
+      region: getRegionForCountry(code)
     }));
     
     // Sort countries by name
