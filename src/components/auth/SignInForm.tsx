@@ -6,10 +6,57 @@ import Button from "@/components/ui/button/Button";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const { signIn } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    console.log("Sign-in attempt with email:", email);
+
+    if (!email || !password) {
+      setError("Please fill in all fields");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      console.log("Calling signIn function");
+      const result = await signIn(email, password);
+      console.log("Sign-in result:", result);
+      if (result?.error) {
+        console.error("Sign-in error:", result.error);
+        setError(result.error.message || "Invalid email or password");
+      } else {
+        console.log("Sign-in successful, redirecting");
+        
+        // Force a hard redirect directly to the dashboard
+        window.location.href = "/dashboard-home";
+        
+        // Don't use router.push at all for this case
+        // router.push("/dashboard-home");
+      }
+    } catch (err: unknown) {
+      console.error("Sign-in exception:", err);
+      const errorMessage = err instanceof Error ? err.message : "An error occurred during sign in";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full">
       <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
@@ -84,13 +131,24 @@ export default function SignInForm() {
                 </span>
               </div>
             </div>
-            <form>
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg dark:bg-red-900/20 dark:border-red-900/30 dark:text-red-400">
+                {error}
+              </div>
+            )}
+            <form onSubmit={handleSubmit}>
               <div className="space-y-6">
                 <div>
                   <Label>
                     Email <span className="text-error-500">*</span>{" "}
                   </Label>
-                  <Input placeholder="info@gmail.com" type="email" />
+                  <Input 
+                    placeholder="info@gmail.com" 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
                 <div>
                   <Label>
@@ -100,6 +158,9 @@ export default function SignInForm() {
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -128,8 +189,13 @@ export default function SignInForm() {
                   </Link>
                 </div>
                 <div>
-                  <Button className="w-full" size="sm">
-                    Sign in
+                  <Button 
+                    className="w-full" 
+                    size="sm"
+                    type="submit"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Signing in..." : "Sign in"}
                   </Button>
                 </div>
               </div>
