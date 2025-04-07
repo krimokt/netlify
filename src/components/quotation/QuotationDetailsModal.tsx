@@ -410,10 +410,13 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <div className="relative h-[calc(100vh-200px)] overflow-auto" onClick={(e) => e.stopPropagation()}>
               <div className="relative w-full h-full" style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center' }}>
                 <div className="flex items-center justify-center h-full">
-                  <img
+                  <Image
                     src={zoomImage}
                     alt="Zoomed product"
+                    width={1200}
+                    height={800}
                     className="max-w-full max-h-full"
+                    unoptimized
                   />
                 </div>
               </div>

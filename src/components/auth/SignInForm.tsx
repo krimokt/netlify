@@ -7,7 +7,6 @@ import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,7 +17,6 @@ export default function SignInForm() {
   const [isLoading, setIsLoading] = useState(false);
   
   const { signIn } = useAuth();
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,9 +42,6 @@ export default function SignInForm() {
         
         // Force a hard redirect directly to the dashboard
         window.location.href = "/dashboard-home";
-        
-        // Don't use router.push at all for this case
-        // router.push("/dashboard-home");
       }
     } catch (err: unknown) {
       console.error("Sign-in exception:", err);

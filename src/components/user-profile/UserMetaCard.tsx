@@ -283,10 +283,12 @@ export default function UserMetaCard() {
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <div className="w-20 h-20 overflow-hidden border border-gray-200 rounded-full dark:border-gray-800 flex items-center justify-center">
                     {profileImage ? (
-                      <img 
-                        src={profileImage} 
-                        alt="Profile Preview" 
-                        className="w-full h-full object-cover" 
+                      <Image
+                        width={80}
+                        height={80}
+                        src={profileImage}
+                        alt="Profile Preview"
+                        className="object-cover w-full h-full"
                       />
                     ) : profileData.avatar_url ? (
                       <Image
