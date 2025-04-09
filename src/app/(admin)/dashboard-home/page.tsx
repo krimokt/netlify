@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ArrowUpIcon, 
   BoxIconLine, 
@@ -21,60 +21,19 @@ import Image from "next/image";
 import ShippingTracking from "@/components/shipping/ShippingTracking";
 import QuotationFormModal from "@/components/quotation/QuotationFormModal";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
-// Sample data for the quotation requests table
-const quotationData = [
-  {
-    id: "QR-1001",
-    product: {
-      name: "Steel Pipes",
-      image: "/images/product/product-01.jpg"
-    },
-    quantity: "500 units",
-    date: "2023-12-15",
-    status: "Pending"
-  },
-  {
-    id: "QR-1002",
-    product: {
-      name: "Aluminum Sheets",
-      image: "/images/product/product-02.jpg"
-    },
-    quantity: "200 units",
-    date: "2023-12-18",
-    status: "Processing"
-  },
-  {
-    id: "QR-1003",
-    product: {
-      name: "Copper Wires",
-      image: "/images/product/product-03.jpg"
-    },
-    quantity: "1000 meters",
-    date: "2023-12-20",
-    status: "Completed"
-  },
-  {
-    id: "QR-1004",
-    product: {
-      name: "Silicon Wafers",
-      image: "/images/product/product-04.jpg"
-    },
-    quantity: "50 units",
-    date: "2023-12-22",
-    status: "Pending"
-  },
-  {
-    id: "QR-1005",
-    product: {
-      name: "PVC Pipes",
-      image: "/images/product/product-05.jpg"
-    },
-    quantity: "300 units",
-    date: "2023-12-25",
-    status: "Processing"
-  }
-];
+// Define the type for quotation data
+interface QuotationItem {
+  id: string;
+  product: {
+    name: string;
+    image: string;
+  };
+  quantity: string;
+  date: string;
+  status: string;
+}
 
 // Sample data for the recent orders requests table
 const ordersData = [
@@ -112,7 +71,48 @@ const ordersData = [
 
 export default function DashboardHome() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [quotationData, setQuotationData] = useState<QuotationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+
+  // Fetch real quotation data from Supabase
+  useEffect(() => {
+    async function fetchQuotations() {
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase
+          .from('quotations')
+          .select('id, quotation_id, product_name, quantity, created_at, status')
+          .order('created_at', { ascending: false })
+          .limit(3);
+          
+        if (error) {
+          console.error("Error fetching quotations:", error);
+          return;
+        }
+        
+        // Transform data to match the format expected by the component
+        const formattedData = data.map(item => ({
+          id: item.quotation_id,
+          product: {
+            name: item.product_name,
+            image: "/images/product/product-01.jpg" // Default image
+          },
+          quantity: `${item.quantity} units`,
+          date: new Date(item.created_at).toLocaleDateString(),
+          status: item.status
+        }));
+        
+        setQuotationData(formattedData);
+      } catch (error) {
+        console.error("Exception fetching quotations:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchQuotations();
+  }, [isModalOpen]); // Refetch when modal closes (possibly after creating a new quote)
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
@@ -281,7 +281,23 @@ export default function DashboardHome() {
 
                 {/* Table Body */}
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                  {quotationData.slice(0, 3).map((item) => (
+                  {isLoading && (
+                    <TableRow>
+                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                        Loading latest quotations...
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  
+                  {!isLoading && quotationData.length === 0 && (
+                    <TableRow>
+                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                        No quotations found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  
+                  {!isLoading && quotationData.map((item) => (
                     <TableRow 
                       key={item.id}
                       className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
@@ -315,7 +331,7 @@ export default function DashboardHome() {
                         <Badge
                           size="sm"
                           color={
-                            item.status === "Completed"
+                            item.status === "Approved"
                               ? "success"
                               : item.status === "Processing"
                               ? "warning"

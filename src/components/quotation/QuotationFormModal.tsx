@@ -11,6 +11,7 @@ import {
 } from "@/icons";
 import { useDropzone } from "react-dropzone";
 import { countries as countryCodes } from 'country-flag-icons';
+import { supabase } from "@/lib/supabase";
 
 // Shipping methods based on destination region
 const getShippingMethods = (region: string) => {
@@ -49,6 +50,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
   const [step, setStep] = useState(1);
   const [countries, setCountries] = useState<CountryData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     productName: "",
     alibabaUrl: "",
@@ -162,6 +164,31 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
 
   // Navigate to next step
   const nextStep = () => {
+    // Validate fields for the current step
+    if (step === 1) {
+      if (!formData.productName.trim()) {
+        alert("Please enter a product name");
+        return;
+      }
+      if (!formData.quantity.trim() || isNaN(parseInt(formData.quantity, 10))) {
+        alert("Please enter a valid quantity (must be a number)");
+        return;
+      }
+    } else if (step === 2) {
+      if (!formData.destinationCountry) {
+        alert("Please select a destination country");
+        return;
+      }
+      if (!formData.destinationCity.trim()) {
+        alert("Please enter a destination city");
+        return;
+      }
+      if (!formData.shippingMethod) {
+        alert("Please select a shipping method");
+        return;
+      }
+    }
+    
     setStep(step + 1);
   };
 
@@ -171,11 +198,164 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
   };
 
   // Submit the form
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
-    // Here you would typically send the data to your backend
-    onClose();
+    
+    // Validate all required fields
+    if (!formData.productName.trim()) {
+      alert("Please enter a product name");
+      setStep(1);
+      return;
+    }
+    
+    // Validate quantity is a number
+    if (!formData.quantity.trim() || isNaN(parseInt(formData.quantity, 10))) {
+      alert("Please enter a valid quantity (must be a number)");
+      setStep(1);
+      return;
+    }
+    
+    if (!formData.destinationCountry) {
+      alert("Please select a destination country");
+      setStep(2);
+      return;
+    }
+    
+    if (!formData.destinationCity.trim()) {
+      alert("Please enter a destination city");
+      setStep(2);
+      return;
+    }
+    
+    if (!formData.shippingMethod) {
+      alert("Please select a shipping method");
+      setStep(2);
+      return;
+    }
+    
+    if (!formData.serviceType) {
+      alert("Please select a service type");
+      return;
+    }
+    
+    // Prevent multiple submissions
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Get the current user session
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      // Upload images first if any
+      const imageUrls: string[] = [];
+      
+      if (formData.productImages.length > 0) {
+        for (const file of formData.productImages) {
+          try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+            const filePath = `product-images/${fileName}`;
+            
+            // Try direct upload
+            const { error: uploadError } = await supabase.storage
+              .from('quotation-images')
+              .upload(filePath, file);
+              
+            if (!uploadError) {
+              // Get the public URL if upload successful
+              const { data: urlData } = supabase.storage
+                .from('quotation-images')
+                .getPublicUrl(filePath);
+                
+              if (urlData?.publicUrl) {
+                imageUrls.push(urlData.publicUrl);
+              }
+            } else {
+              console.error("Error uploading image:", uploadError);
+            }
+          } catch (uploadErr) {
+            console.error("Exception during image upload:", uploadErr);
+          }
+        }
+      }
+      
+      // Format the data for API
+      const quotationData = {
+        quotation_id: `QT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+        product_name: formData.productName.trim(),
+        alibaba_url: formData.alibabaUrl || '', 
+        quantity: parseInt(formData.quantity, 10),
+        destination_country: countries.find(c => c.code === formData.destinationCountry)?.name || formData.destinationCountry,
+        destination_city: formData.destinationCity,
+        shipping_method: formData.shippingMethod,
+        service_type: formData.serviceType,
+        status: "Pending",
+        // Add image URLs if we have any
+        ...(imageUrls.length > 0 ? { 
+          image_urls: imageUrls,
+          product_images: imageUrls // For backwards compatibility
+        } : {}),
+        // Add user_id if available from session
+        ...(sessionData?.session?.user?.id ? { user_id: sessionData.session.user.id } : {})
+      };
+      
+      console.log("Submitting quotation data:", JSON.stringify(quotationData, null, 2));
+      
+      let data;
+      
+      try {
+        // Skip the API route and use direct Supabase insert
+        console.log("Using direct Supabase client insert...");
+        
+        // Try direct insert with client-side Supabase
+        const { data: insertData, error: insertError } = await supabase
+          .from('quotations')
+          .insert([quotationData])
+          .select();
+          
+        if (insertError) {
+          console.error("Direct insert failed:", insertError);
+          throw new Error(`Failed to submit quotation: ${insertError.message}`);
+        }
+        
+        console.log("Direct insert successful");
+        data = insertData;
+        
+        // If we have images but couldn't include them in the initial submission,
+        // update the record with a direct Supabase call
+        if (imageUrls.length > 0 && data && data[0]?.id && 
+            (!data[0].image_urls || data[0].image_urls.length === 0)) {
+          try {
+            const { error: updateError } = await supabase
+              .from('quotations')
+              .update({ 
+                image_urls: imageUrls,
+                product_images: imageUrls // For backwards compatibility
+              })
+              .eq('id', data[0].id);
+              
+            if (updateError) {
+              console.error("Failed to update quotation with image URLs:", updateError);
+            }
+          } catch (updateError) {
+            console.error("Error updating image URLs:", updateError);
+          }
+        }
+        
+        console.log("Form submitted successfully:", data);
+        alert("Your quotation has been submitted successfully!");
+        onClose();
+      } catch (error: unknown) {
+        console.error("Exception submitting form:", error);
+        alert(error instanceof Error ? error.message : "There was an unexpected error. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
+    } catch (error: unknown) {
+      console.error("Exception submitting form:", error);
+      alert(error instanceof Error ? error.message : "There was an unexpected error. Please try again.");
+    }
   };
 
   return (
@@ -228,7 +408,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Product Name
+                  Product Name *
                 </label>
                 <input
                   type="text"
@@ -255,13 +435,14 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Quantity Required
+                  Quantity Required *
                 </label>
                 <input
                   type="number"
                   name="quantity"
                   value={formData.quantity}
                   onChange={handleChange}
+                  min="1"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   required
                 />
@@ -362,7 +543,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Destination Country
+                  Destination Country *
                 </label>
                 <input
                   type="text"
@@ -420,7 +601,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  City
+                  City *
                 </label>
                 <input
                   type="text"
@@ -434,7 +615,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Shipping Method
+                  Shipping Method *
                 </label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {formData.destinationCountry && 
@@ -490,7 +671,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
               
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Choose one:
+                  Choose one: *
                 </label>
                 
                 <div className="flex items-center gap-2">
@@ -542,6 +723,11 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
             </div>
           )}
 
+          {/* Note about required fields */}
+          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            <p>* Fields marked with an asterisk are required</p>
+          </div>
+
           {/* Form navigation buttons */}
           <div className="flex justify-between mt-6">
             {step > 1 ? (
@@ -567,9 +753,22 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
             ) : (
               <button
                 type="submit"
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-[#1E88E5] rounded-md hover:bg-[#0D47A1]"
+                disabled={isSubmitting}
+                className={`flex items-center px-4 py-2 text-sm font-medium text-white bg-[#1E88E5] rounded-md ${
+                  isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-[#0D47A1]'
+                }`}
               >
-                Submit Quotation
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Quotation'
+                )}
               </button>
             )}
           </div>
