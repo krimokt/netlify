@@ -1,21 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
-import { CloseIcon } from "@/icons";
-import { supabase } from "@/lib/supabase";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
-import { useRouter } from "next/navigation";
-import { toast } from "@/lib/toast";
-import { CheckCircle } from "@/components/icons/CheckCircle";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { createClient } from "@/utils/supabase/client";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
 
 interface PriceOption {
   id: string;
@@ -48,10 +40,20 @@ interface QuotationData {
   hasImage?: boolean;
 }
 
-const CheckoutPage = () => {
+// Component specifically for handling search params
+function SearchParamsHandler() {
   const searchParams = useSearchParams();
-  const quotationId = searchParams.get('quotation');
+  const quotationId = searchParams.get("quotation");
   const router = useRouter();
+  return { quotationId, router };
+}
+
+// Component to handle main content
+function CheckoutContent({ quotationId, router }: { quotationId: string | null, router: ReturnType<typeof useRouter> }) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   
   const [approvedQuotations, setApprovedQuotations] = useState<QuotationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,15 +62,10 @@ const CheckoutPage = () => {
   const [pendingPriceSelections, setPendingPriceSelections] = useState<Record<string, string>>({});
   const [showPendingSelectionModal, setShowPendingSelectionModal] = useState(false);
   const [currentPendingQuotation, setCurrentPendingQuotation] = useState<QuotationData | null>(null);
-  const [showProcessingModal, setShowProcessingModal] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState<'processing' | 'pending' | 'approved' | 'rejected'>('processing');
   const [error, setError] = useState<string | null>(null);
-  const [selectedPendingOption, setSelectedPendingOption] = useState<PriceOption | null>(null);
   const [isPaymentProcessingModalOpen, setIsPaymentProcessingModalOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'success' | 'failed' | 'processing'>('processing');
   const [isProcessing, setIsProcessing] = useState(false);
-  const supabase = createClient();
-  const [user, setUser] = useState<{ id: string } | null>(null);
 
   // Fetch approved quotations, price options, and user selections
   useEffect(() => {
@@ -77,7 +74,7 @@ const CheckoutPage = () => {
         setIsLoading(true);
         setError(null);
         
-        // Get user session - improve this part to properly set the user
+        // Get user session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -86,16 +83,6 @@ const CheckoutPage = () => {
           return;
         }
         
-        // Set the user with the session user data
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          // No user session found
-          setError("You need to be logged in to view the checkout page.");
-          router.push('/login'); // Redirect to login
-          return;
-        }
-
         const userId = session?.user?.id;
         
         if (!userId) {
@@ -138,7 +125,7 @@ const CheckoutPage = () => {
         // Create maps for price options and user selections
         const priceOptionsMap = new Map();
         if (priceOptionsData) {
-          priceOptionsData.forEach((option: any) => {
+          priceOptionsData.forEach(option => {
             if (!priceOptionsMap.has(option.quotation_ref_id)) {
               priceOptionsMap.set(option.quotation_ref_id, []);
             }
@@ -157,13 +144,13 @@ const CheckoutPage = () => {
         // Create map for user selections
         const userSelectionsMap = new Map();
         if (userSelectionsData) {
-          userSelectionsData.forEach((selection: any) => {
+          userSelectionsData.forEach(selection => {
             userSelectionsMap.set(selection.quotation_id, selection.option_id);
           });
         }
         
         // Transform data to match the format expected by the component
-        const formattedData = quotationsData.map((item: any) => {
+        const formattedData = quotationsData.map(item => {
           // Handle image URL
           let imageUrl = "/images/product/product-01.jpg"; // Default fallback image
           let hasValidImage = false;
@@ -189,7 +176,7 @@ const CheckoutPage = () => {
                   imageUrl = rawImageUrl;
                   hasValidImage = true;
                 }
-              } catch (e) {
+              } catch {
                 console.warn("Invalid image URL:", rawImageUrl);
                 imageUrl = "/images/product/product-01.jpg";
                 hasValidImage = false;
@@ -240,13 +227,13 @@ const CheckoutPage = () => {
         setApprovedQuotations(formattedData);
         
         // Pre-select quotation if provided in URL
-    if (quotationId) {
-      setSelectedQuotations([quotationId]);
-    }
+        if (quotationId) {
+          setSelectedQuotations([quotationId]);
+        }
 
         // Create initial pending selections state
         const initialPendingSelections: Record<string, string> = {};
-        formattedData.forEach((quotation: any) => {
+        formattedData.forEach(quotation => {
           if (quotation.selectedOption) {
             initialPendingSelections[quotation.id] = quotation.selectedOption;
           }
@@ -262,7 +249,7 @@ const CheckoutPage = () => {
     }
     
     fetchData();
-  }, [quotationId]);
+  }, [quotationId, supabase]);
 
   const calculateTotal = () => {
     return selectedQuotations.reduce((total, quotationId) => {
@@ -396,98 +383,61 @@ const CheckoutPage = () => {
     setSelectedBank(bank);
   };
 
-  // Function to get internal UUIDs from display quotation IDs
-  const getQuotationUUIDs = (quotationIds: string[]): string[] => {
-    return quotationIds.map(qId => {
-      const quotation = approvedQuotations.find(q => q.id === qId);
-      // Return the internal UUID if available, otherwise use the display ID
-      return quotation?.uuid || qId;
-    }).filter(Boolean);
-  };
-
   const handleCompletePayment = async () => {
-    if (!selectedBank) {
-      toast.error('Please select a payment method')
-      return
-    }
-
-    if (selectedQuotations.length === 0) {
-      toast.error('No quotations selected for payment')
-      return
-    }
-
-    // Check for user authentication before proceeding
-    if (!user || !user.id) {
-      // Redirect to login page if user is not authenticated
-      toast.error('You must be logged in to complete payment');
-      router.push('/login');
-      return;
-    }
-
-    setIsProcessing(true)
-    setIsPaymentProcessingModalOpen(true)
-
     try {
-      // Get the internal UUIDs for the selected quotations
-      const quotationUuids = getQuotationUUIDs(selectedQuotations);
-      const totalAmount = calculateTotal()
-      const userId = user.id
-      const referenceNumber = generateReferenceNumber()
-
-      console.log('Using quotation UUIDs:', quotationUuids);
-
-      // Create payment record in Supabase
-      const { data: paymentData, error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          user_id: userId,
-          amount: totalAmount,
-          currency: 'USD',
-          status: 'pending', // Payment starts as pending
-          payment_method: selectedBank,
-          quotation_ids: quotationUuids,
-          reference_number: referenceNumber,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-
-      if (paymentError) {
-        throw new Error(paymentError.message)
-      }
-
-      // Update quotation status to "payment-pending" using the ID column (not uuid)
-      const { error: quotationError } = await supabase
-        .from('quotations')
-        .update({ status: 'payment-pending' })
-        .in('id', quotationUuids)
-
-      if (quotationError) {
-        throw new Error(quotationError.message)
-      }
-
-      // Set payment as pending, awaiting admin approval
-      setPaymentStatus('success')
+      setIsProcessing(true);
+      setPaymentStatus('processing');
+      setIsPaymentProcessingModalOpen(true);
       
-      // Clear cart
-      setSelectedQuotations([])
-      localStorage.removeItem('selectedQuotations')
-
+      // Simulate payment processing
+      setTimeout(async () => {
+        try {
+          // Create payment records in Supabase
+          for (const quotationId of selectedQuotations) {
+            const quotation = approvedQuotations.find(q => q.id === quotationId);
+            const selectedOptionId = pendingPriceSelections[quotationId] || '';
+            
+            if (quotation) {
+              const { error } = await supabase
+                .from('payments')
+                .insert({
+                  user_id: (await supabase.auth.getUser()).data.user?.id,
+                  quotation_id: quotationId,
+                  amount: selectedOptionId ? 
+                    parseFloat((quotation.priceOptions?.find(opt => opt.id === selectedOptionId)?.price || '0')
+                      .replace(/[$,]/g, '')) : 0,
+                  status: 'pending',
+                  payment_method: selectedBank || 'bank_transfer',
+                  created_at: new Date().toISOString()
+                });
+                
+              if (error) {
+                console.error("Error creating payment record:", error);
+                setPaymentStatus('failed');
+                setIsProcessing(false);
+                return;
+              }
+            }
+          }
+          
+          // If we get here, payment was successful
+          setPaymentStatus('success');
+          setIsProcessing(false);
+          
+          // Clear selected quotations after successful payment
+          setSelectedQuotations([]);
+        } catch (error) {
+          console.error("Payment processing error:", error);
+          setPaymentStatus('failed');
+          setIsProcessing(false);
+        }
+      }, 2000); // Simulate 2 second processing time
+      
     } catch (error) {
-      console.error('Payment error:', error)
-      setPaymentStatus('failed')
-    } finally {
-      setIsProcessing(false)
+      console.error("Payment error:", error);
+      setPaymentStatus('failed');
+      setIsProcessing(false);
     }
-  }
-
-  const closeProcessingModal = () => {
-    setShowProcessingModal(false);
-    if (processingStatus === 'approved') {
-      // Clear selections after successful payment
-      setSelectedQuotations([]);
-    }
-    setIsProcessing(false);
   };
 
   const selectAllWithPendingPrice = () => {
@@ -497,34 +447,23 @@ const CheckoutPage = () => {
     setSelectedQuotations(quotationsWithSelections.map(quotation => quotation.id));
   };
 
-  const handleSelectPendingOption = (opt: PriceOption) => {
-    setSelectedPendingOption(opt);
-  };
-
-  const handleCheckout = () => {
-    // Implementation of handleCheckout function
-  };
-
   const closePaymentProcessingModal = () => {
     setIsPaymentProcessingModalOpen(false);
-    setPaymentStatus('processing');
-    closeProcessingModal();
-  };
-
-  // Function to generate reference number
-  const generateReferenceNumber = () => {
-    return `PAY-${Date.now().toString().slice(-6)}`;
+    if (paymentStatus === 'success') {
+      // Optionally redirect to payment history page
+      router.push('/payment');
+    }
   };
 
   // Loading state
   if (isLoading) {
-  return (
+    return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-t-4 border-t-blue-500 border-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading checkout data...</p>
-            </div>
-          </div>
+        </div>
+      </div>
     );
   }
 
@@ -541,7 +480,7 @@ const CheckoutPage = () => {
         >
           Back to Quotations
         </Button>
-            </div>
+      </div>
     );
   }
 
@@ -550,7 +489,7 @@ const CheckoutPage = () => {
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mx-auto my-8 max-w-3xl">
         <h2 className="text-blue-700 font-semibold text-lg mb-3">No Approved Quotations</h2>
-        <p className="text-blue-600">You don't have any approved quotations to checkout.</p>
+        <p className="text-blue-600">You don&apos;t have any approved quotations to checkout.</p>
         <Button
           variant="primary"
           className="mt-4 bg-blue-600 hover:bg-blue-700"
@@ -558,7 +497,7 @@ const CheckoutPage = () => {
         >
           View All Quotations
         </Button>
-                        </div>
+      </div>
     );
   }
 
@@ -577,14 +516,14 @@ const CheckoutPage = () => {
               </Button>
             </Link>
             <Link href="/payment">
-              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
+              <Button variant="primary" size="sm" className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white">
                 Payment History
               </Button>
             </Link>
-                            </div>
-                          </div>
-                            </div>
-                            
+          </div>
+        </div>
+      </div>
+      
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Quotations Section - Left Side */}
@@ -611,10 +550,10 @@ const CheckoutPage = () => {
                       Add More
                     </Button>
                   </Link>
-                              </div>
-                              </div>
-                            </div>
-                            
+                </div>
+              </div>
+            </div>
+            
             {/* Quotation Items */}
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {approvedQuotations.length === 0 ? (
@@ -623,30 +562,30 @@ const CheckoutPage = () => {
                     <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                                  </div>
+                  </div>
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No items in checkout</h3>
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">You don't have any approved quotations to checkout.</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">You don&apos;t have any approved quotations to checkout.</p>
                   <Link href="/quotation">
                     <Button variant="primary" className="bg-blue-600 hover:bg-blue-700">
                       View Quotations
                     </Button>
                   </Link>
-                                </div>
-                              ) : (
+                </div>
+              ) : (
                 approvedQuotations.map((quotation) => (
-                      <div 
-                        key={quotation.id}
+                  <div 
+                    key={quotation.id}
                     className={`transition-colors duration-200 ${
-                          selectedQuotations.includes(quotation.id) 
-                        ? 'bg-blue-50 dark:bg-blue-900/20' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                      selectedQuotations.includes(quotation.id) 
+                      ? 'bg-blue-50 dark:bg-blue-900/20' 
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
                     } ${
                       quotation.priceOptions && quotation.priceOptions.length > 0 && 
                       !quotation.selectedOption && !pendingPriceSelections[quotation.id]
-                        ? 'border-l-4 border-yellow-400'
-                              : ''
-                        }`}
-                      >
+                      ? 'border-l-4 border-yellow-400'
+                      : ''
+                    }`}
+                  >
                     <div className="p-4">
                       <div className="flex items-start">
                         <div className="mr-4 pt-1">
@@ -663,16 +602,16 @@ const CheckoutPage = () => {
                             <div className="flex-shrink-0">
                               <div className="w-24 h-24 relative rounded-lg overflow-hidden">
                                 {quotation.hasImage ? (
-                              <Image
-                                src={quotation.product.image}
-                                alt={quotation.product.name}
-                                fill
-                                className="object-cover"
-                              />
+                                  <Image
+                                    src={quotation.product.image}
+                                    alt={quotation.product.name}
+                                    fill
+                                    className="object-cover"
+                                  />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
                                     No image
-                            </div>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -680,11 +619,11 @@ const CheckoutPage = () => {
                             {/* Product Details */}
                             <div className="flex-1">
                               <div className="flex flex-col sm:flex-row justify-between">
-                              <div>
+                                <div>
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h3 className="font-medium text-gray-900 dark:text-white">{quotation.product.name}</h3>
                                     <Badge size="sm" color="success">{quotation.status}</Badge>
-                              </div>
+                                  </div>
                                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     <span className="inline-flex items-center">
                                       <svg className="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -704,15 +643,15 @@ const CheckoutPage = () => {
                                       </svg>
                                       Date: {quotation.date}
                                     </span>
-                              </div>
+                                  </div>
                                   <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 inline-flex items-center">
                                     <svg className="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                     </svg>
                                     Shipping: {quotation.shippingMethod} to {quotation.destination}
-                              </div>
-                            </div>
-                            
+                                  </div>
+                                </div>
+                                
                                 {/* Price Info */}
                                 <div className="mt-3 sm:mt-0 text-right">
                                   <div className="font-bold text-lg text-gray-900 dark:text-white">
@@ -732,44 +671,44 @@ const CheckoutPage = () => {
                                         variant="outline"
                                         size="sm"
                                         className="text-sm text-blue-600 dark:text-blue-400"
-                                    onClick={() => {
-                                      setCurrentPendingQuotation(quotation);
-                                      setShowPendingSelectionModal(true);
-                                    }}
+                                        onClick={() => {
+                                          setCurrentPendingQuotation(quotation);
+                                          setShowPendingSelectionModal(true);
+                                        }}
                                       >
                                         {quotation.selectedOption || pendingPriceSelections[quotation.id] 
                                           ? "Change Option" 
                                           : "Select Option"
                                         }
                                       </Button>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
+                    </div>
                   </div>
-              </div>
-            </div>
-          </div>
                 ))
               )}
-                </div>
-                    </div>
-              </div>
-              
+            </div>
+          </div>
+        </div>
+        
         {/* Order Summary Section - Right Side */}
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden sticky top-6">
             <div className="p-5 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Order Summary</h2>
-                </div>
+            </div>
             <div className="p-5">
-            <div className="space-y-4">
+              <div className="space-y-4">
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
                   <span className="font-medium text-gray-900 dark:text-white">${calculateTotal().toLocaleString()}</span>
-                  </div>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Shipping</span>
                   <span className="font-medium text-gray-900 dark:text-white">Included</span>
@@ -777,13 +716,13 @@ const CheckoutPage = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Tax</span>
                   <span className="font-medium text-gray-900 dark:text-white">$0.00</span>
-                      </div>
+                </div>
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex justify-between">
                     <span className="font-semibold text-gray-900 dark:text-white">Total</span>
                     <span className="font-bold text-xl text-[#0D47A1] dark:text-blue-400">${calculateTotal().toLocaleString()}</span>
-                      </div>
-                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-6">
@@ -799,7 +738,7 @@ const CheckoutPage = () => {
                       }`}
                       onClick={() => handleBankSelection(bank)}
                     >
-                  <div className="flex items-center">
+                      <div className="flex items-center">
                         <div className="mr-3">
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                             selectedBank === bank 
@@ -809,13 +748,13 @@ const CheckoutPage = () => {
                             {selectedBank === bank && (
                               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                             )}
-                  </div>
-                </div>
+                          </div>
+                        </div>
                         <div className="font-medium">{bank}</div>
                       </div>
-                      </div>
-                  ))}
                     </div>
+                  ))}
+                </div>
               </div>
 
               <div className="mt-6">
@@ -852,12 +791,12 @@ const CheckoutPage = () => {
                       </>
                     )}
                   </Button>
-              </div>
-                  </div>
                 </div>
-                  </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
       {/* Price Selection Modal - Simplified */}
       <Modal
@@ -869,56 +808,56 @@ const CheckoutPage = () => {
         {currentPendingQuotation && (
           <div className="p-5">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                    Select Price Option
-                  </h2>
+              Select Price Option
+            </h2>
             
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Product: <span className="font-medium text-gray-700 dark:text-white">{currentPendingQuotation.product.name}</span>
-                </div>
+            </div>
 
             <div className="space-y-3 mb-5">
-                  {currentPendingQuotation.priceOptions?.map((option) => (
-                    <div 
-                      key={option.id}
+              {currentPendingQuotation.priceOptions?.map((option) => (
+                <div 
+                  key={option.id}
                   className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                        pendingPriceSelections[currentPendingQuotation.id] === option.id 
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                      }`}
-                      onClick={() => handlePriceOptionSelection(currentPendingQuotation.id, option.id)}
-                    >
+                    pendingPriceSelections[currentPendingQuotation.id] === option.id 
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                  }`}
+                  onClick={() => handlePriceOptionSelection(currentPendingQuotation.id, option.id)}
+                >
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white flex items-center">
                         <div className={`w-3 h-3 rounded-full mr-2 ${pendingPriceSelections[currentPendingQuotation.id] === option.id ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
                         {option.supplier || 'Supplier'}
-                        </div>
+                      </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-5">
                         Delivery: {option.deliveryTime}
-                        </div>
-                          </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-900 dark:text-white">{option.price}</div>
-                          </div>
                       </div>
                     </div>
-                  ))}
-              </div>
-              
+                    <div className="text-right">
+                      <div className="font-bold text-gray-900 dark:text-white">{option.price}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
             <div className="flex justify-end space-x-3 pt-3 border-t border-gray-200 dark:border-gray-700">
               <Button
                 variant="outline"
                 size="sm"
-                  onClick={() => setShowPendingSelectionModal(false)}
-                >
-                  Cancel
+                onClick={() => setShowPendingSelectionModal(false)}
+              >
+                Cancel
               </Button>
               <Button
                 size="sm"
                 className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                  onClick={handleSavePriceSelection}
-                  disabled={!pendingPriceSelections[currentPendingQuotation.id]}
-                >
+                onClick={handleSavePriceSelection}
+                disabled={!pendingPriceSelections[currentPendingQuotation.id]}
+              >
                 Save Selection
               </Button>
             </div>
@@ -941,34 +880,47 @@ const CheckoutPage = () => {
                 Processing Payment
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                    Please wait while we process your payment...
-                  </p>
+                Please wait while we process your payment...
+              </p>
             </>
           ) : paymentStatus === 'success' ? (
-            <div className="flex flex-col items-center text-center">
-              <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Recorded</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mt-2">
-                Your payment has been recorded and is pending administrator approval. 
-                Please upload proof of payment in the Payment History page.
+            <>
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 dark:text-white">
+                Payment Successful
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Your payment has been processed successfully.
               </p>
-              <Button
-                className="mt-6"
-                onClick={() => {
-                  setIsPaymentProcessingModalOpen(false)
-                  router.push('/payment')
-                }}
-              >
-                View Payment History
-              </Button>
-                </div>
+              <div className="flex justify-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={closePaymentProcessingModal}
+                >
+                  Close
+                </Button>
+                <Link href="/payment">
+                  <Button
+                    size="sm"
+                    className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
+                  >
+                    View Payment History
+                  </Button>
+                </Link>
+              </div>
+            </>
           ) : (
             <>
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </div>
+                </svg>
+              </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2 dark:text-white">
                 Payment Failed
               </h3>
@@ -980,8 +932,8 @@ const CheckoutPage = () => {
                   size="sm"
                   variant="outline"
                   onClick={closePaymentProcessingModal}
-                    >
-                      Close
+                >
+                  Close
                 </Button>
                 <Button
                   size="sm"
@@ -990,13 +942,33 @@ const CheckoutPage = () => {
                 >
                   Try Again
                 </Button>
-                  </div>
+              </div>
             </>
-        )}
-      </div>
+          )}
+        </div>
       </Modal>
     </div>
   );
-};
+}
 
-export default CheckoutPage; 
+// Main component with Suspense boundary using a specialized approach for Next.js 15
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-64">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-t-4 border-t-blue-500 border-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading checkout page...</p>
+        </div>
+      </div>
+    }>
+      <SearchParamsWrapper />
+    </Suspense>
+  );
+}
+
+// Component that handles the search params and renders the main content
+function SearchParamsWrapper() {
+  const { quotationId, router } = SearchParamsHandler();
+  return <CheckoutContent quotationId={quotationId} router={router} />;
+} 

@@ -53,9 +53,6 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
     ? quotation.priceOptions 
     : [];
 
-  // Show price options UI only if there are options or if status is Approved
-  const showPriceOptions = displayPriceOptions.length > 0 || quotation.status === "Approved";
-
   // Improved function with better error handling
   const saveOptionToDatabase = async (optionId: string) => {
     try {

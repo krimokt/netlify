@@ -30,12 +30,19 @@ interface QuotationInfo {
   imageUrl?: string;
 }
 
+// Define types for error to avoid using 'any'
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
 export default function PaymentPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
   const [quotationsMap, setQuotationsMap] = useState<Record<string, QuotationInfo[]>>({});
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -49,10 +56,10 @@ export default function PaymentPage() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
         
-        if (error) {
-          throw error;
+        if (authError) {
+          throw authError;
         }
         
         if (!user) {
@@ -60,10 +67,10 @@ export default function PaymentPage() {
           return;
         }
         
-        setUser(user);
         return user;
-      } catch (error: any) {
-        setError(error.message);
+      } catch (error: unknown) {
+        const supabaseError = error as SupabaseError;
+        setError(supabaseError.message);
         return null;
       }
     };
@@ -91,23 +98,24 @@ export default function PaymentPage() {
         }
 
         // Format the payment data
-        const formattedPayments = data.map((payment: any) => ({
-          id: payment.id,
-          amount: payment.amount,
-          status: payment.status,
-          date: new Date(payment.created_at).toLocaleDateString(),
-          quotations: payment.quotation_ids || [],
-          paymentMethod: payment.payment_method,
-          referenceNumber: payment.reference_number,
-          proofUrl: payment.payment_proof_url
+        const formattedPayments = data.map((payment: Record<string, unknown>) => ({
+          id: payment.id as string,
+          amount: payment.amount as number,
+          status: payment.status as "pending" | "processing" | "completed" | "failed",
+          date: new Date((payment.created_at as string)).toLocaleDateString(),
+          quotations: (payment.quotation_ids as string[]) || [],
+          paymentMethod: payment.payment_method as string,
+          referenceNumber: payment.reference_number as string,
+          proofUrl: payment.payment_proof_url as string | undefined
         }));
 
         setPayments(formattedPayments);
         
         // Fetch quotation details for all payments
         await fetchQuotationDetails(formattedPayments);
-      } catch (error: any) {
-        setError(error.message);
+      } catch (error: unknown) {
+        const supabaseError = error as SupabaseError;
+        setError(supabaseError.message);
       } finally {
         setIsLoading(false);
       }
@@ -117,106 +125,34 @@ export default function PaymentPage() {
       try {
         // Collect all quotation IDs
         const allQuotationIds = paymentsData.flatMap(payment => payment.quotations);
-    
+        
         if (allQuotationIds.length === 0) return;
         
-        // Log quotation IDs for debugging
-        console.log("Quotation IDs before filtering:", allQuotationIds);
-        
-        // UUID validation regex
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        
-        // Filter out any invalid IDs - must be valid UUIDs
-        const validQuotationIds = allQuotationIds.filter(id => {
-          if (!id || typeof id !== 'string') return false;
-          // Test if it's a valid UUID format
-          return uuidRegex.test(id.trim());
-        });
-        
-        if (validQuotationIds.length === 0) {
-          console.warn("No valid UUID quotation IDs found. Original IDs:", allQuotationIds);
-          const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
-          paymentsData.forEach(payment => {
-            emptyQuotationsByPayment[payment.id] = [];
-          });
-          setQuotationsMap(emptyQuotationsByPayment);
-          return;
+        // Fetch quotation details from Supabase
+        const { data, error } = await supabase
+          .from('quotations')
+          .select(`
+            id,
+            quotation_id,
+            product_name,
+            quantity,
+            status,
+            created_at,
+            product_images
+          `)
+          .in('id', allQuotationIds);
+
+        if (error) {
+          throw error;
         }
-        
-        console.log(`Found ${validQuotationIds.length} valid UUIDs out of ${allQuotationIds.length} quotation IDs`);
-        
-        // Split IDs into smaller batches to avoid Supabase limitations
-        const batchSize = 10; // Smaller batch size
-        const quotationsById: Record<string, any> = {};
-        
-        // Process each batch individually
-        for (let i = 0; i < validQuotationIds.length; i += batchSize) {
-          const batch = validQuotationIds.slice(i, i + batchSize);
-          const batchNumber = Math.floor(i/batchSize) + 1;
-          
-          console.log(`Processing batch ${batchNumber} with ${batch.length} UUIDs:`, batch);
-          
-          try {
-            // Use a simpler query approach - fetch one by one if needed
-            for (const quotationId of batch) {
-              try {
-                const { data, error } = await supabase
-                  .from('quotations')
-                  .select(`
-                    id,
-                    quotation_id,
-                    product_name,
-                    quantity, 
-                    status,
-                    created_at,
-                    product_images
-                  `)
-                  .eq('id', quotationId)
-                  .single();
-                
-                if (error) {
-                  // Log specific error for this quotation and continue
-                  console.error(`Error fetching quotation ${quotationId}:`, error);
-                  continue;
-                }
-                
-                if (data) {
-                  quotationsById[quotationId] = data;
-                  console.log(`Successfully fetched quotation: ${quotationId}`);
-                }
-              } catch (singleFetchError: any) {
-                console.error(`Error in single fetch for ${quotationId}:`, singleFetchError?.message || singleFetchError);
-              }
-            }
-          } catch (batchError: any) {
-            console.error(`Error processing batch ${batchNumber}:`, batchError?.message || batchError);
-            // Continue with other batches
-          }
-        }
-        
-        // Check if we got any results
-        const quotationIds = Object.keys(quotationsById);
-        if (quotationIds.length === 0) {
-          console.warn("No quotation data retrieved after processing all batches");
-          const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
-          paymentsData.forEach(payment => {
-            emptyQuotationsByPayment[payment.id] = [];
-          });
-          setQuotationsMap(emptyQuotationsByPayment);
-          return;
-        }
-        
-        console.log(`Successfully retrieved ${quotationIds.length} quotations out of ${validQuotationIds.length} valid IDs`);
-        
+
         // Process quotation data and organize by payment
         const quotationsByPayment: Record<string, QuotationInfo[]> = {};
         
         paymentsData.forEach(payment => {
-          const paymentQuotations = payment.quotations
-            .filter(qId => quotationsById[qId]) // Only include quotations we found
-            .map(qId => {
-              const q = quotationsById[qId];
-              
+          const paymentQuotations = data
+            .filter(q => payment.quotations.includes(q.id))
+            .map(q => {
               // Handle image processing similar to quotation page
               let imageUrl = "/images/product/product-01.jpg";
               let hasImage = false;
@@ -242,7 +178,7 @@ export default function PaymentPage() {
                       imageUrl = rawImageUrl;
                       hasImage = true;
                     }
-                  } catch (e) {
+                  } catch {
                     console.warn("Invalid image URL:", rawImageUrl);
                     hasImage = false;
                   }
@@ -265,19 +201,8 @@ export default function PaymentPage() {
         });
         
         setQuotationsMap(quotationsByPayment);
-      } catch (error: any) {
-        // Enhanced error logging with message and stack trace
-        console.error("Error fetching quotation details:", error?.message || "Unknown error");
-        if (error?.stack) {
-          console.error("Stack trace:", error.stack);
-        }
-        
-        // Create empty mapping to avoid UI errors
-        const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
-        paymentsData.forEach(payment => {
-          emptyQuotationsByPayment[payment.id] = [];
-        });
-        setQuotationsMap(emptyQuotationsByPayment);
+      } catch (error: unknown) {
+        console.error("Error fetching quotation details:", error);
       }
     };
 
@@ -289,7 +214,7 @@ export default function PaymentPage() {
     };
 
     init();
-  }, [router, supabase]);
+  }, [router]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -303,21 +228,6 @@ export default function PaymentPage() {
         return 'error';
       default:
         return 'light';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'Approved';
-      case 'processing':
-        return 'Processing';
-      case 'pending':
-        return 'Awaiting Admin Approval';
-      case 'failed':
-        return 'Failed';
-      default:
-        return status;
     }
   };
 
@@ -339,7 +249,7 @@ export default function PaymentPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = () => {
     // Reset states when a new file is selected
     setUploadSuccess(false);
     setUploadError(null);
@@ -378,11 +288,11 @@ export default function PaymentPage() {
       // Generate a unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `payment-proof-${currentPaymentId}-${Date.now()}.${fileExt}`;
-      const filePath = `payment-proofs/${fileName}`; // Store in a subfolder within quotation-images bucket
+      const filePath = `payment-proofs/${fileName}`;
       
-      // Upload to Supabase Storage - using quotation-images bucket which already exists
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('quotation-images') // Use existing bucket instead of payment-proofs
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('payment-proofs')
         .upload(filePath, file);
         
       if (uploadError) {
@@ -391,7 +301,7 @@ export default function PaymentPage() {
       
       // Get public URL for the uploaded file
       const { data: urlData } = supabase.storage
-        .from('quotation-images') // Use same bucket for URL
+        .from('payment-proofs')
         .getPublicUrl(filePath);
         
       const publicUrl = urlData.publicUrl;
@@ -430,9 +340,10 @@ export default function PaymentPage() {
         closeUploadModal();
       }, 2000);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error uploading proof:", error);
-      setUploadError(error.message || "Failed to upload payment proof.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload payment proof.";
+      setUploadError(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -506,13 +417,13 @@ export default function PaymentPage() {
       {payments.length === 0 ? (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h2 className="text-blue-700 font-semibold text-lg mb-3">No Payments Found</h2>
-          <p className="text-blue-600 mb-4">You haven't made any payments yet.</p>
+          <p className="text-blue-600 mb-4">You haven&apos;t made any payments yet.</p>
           <Link href="/quotation">
             <Button variant="primary" className="bg-blue-600 hover:bg-blue-700">
               View Quotations
             </Button>
           </Link>
-            </div>
+        </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700">
@@ -530,7 +441,7 @@ export default function PaymentPage() {
                       <h3 className="font-medium text-gray-900 dark:text-white">
                         Payment #{payment.id.slice(-6)}
                       </h3>
-                      <Badge color={getStatusColor(payment.status)}>{getStatusText(payment.status)}</Badge>
+                      <Badge color={getStatusColor(payment.status)}>{payment.status}</Badge>
           </div>
 
                     <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -717,9 +628,8 @@ export default function PaymentPage() {
               <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 pl-2">
                 <li>Select your quotations for payment on the checkout page</li>
                 <li>Complete the payment using one of our available payment methods</li>
-                <li>Upload proof of payment for verification</li>
-                <li>Wait for administrator approval of your payment</li>
-                <li>Once payment is approved, your order will be processed</li>
+                <li>Upload proof of payment if required</li>
+                <li>Once payment is verified, your order will be processed</li>
               </ol>
                     </div>
                   </div>
@@ -804,7 +714,7 @@ export default function PaymentPage() {
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                Payment proof uploaded successfully! Your payment status has been updated to "processing".
+                Payment proof uploaded successfully! Your payment status has been updated to &quot;processing&quot;.
               </div>
             ) : (
               <form onSubmit={handleUploadSubmit}>
@@ -852,7 +762,7 @@ export default function PaymentPage() {
                   size="sm"
                   className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
                     disabled={isUploading}
-                >
+                  >
                     {isUploading ? (
                       <>
                         <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
