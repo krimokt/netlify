@@ -345,7 +345,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
         
         console.log("Form submitted successfully:", data);
         alert("Your quotation has been submitted successfully!");
-        onClose();
+    onClose();
       } catch (error: unknown) {
         console.error("Exception submitting form:", error);
         alert(error instanceof Error ? error.message : "There was an unexpected error. Please try again.");

@@ -33,6 +33,15 @@ interface QuotationItem {
   quantity: string;
   date: string;
   status: string;
+  hasImage: boolean;
+}
+
+// Define type for dashboard metrics
+interface DashboardMetrics {
+  pendingQuotations: number;
+  activeShipments: number;
+  deliveredProducts: number;
+  totalSpend: number;
 }
 
 // Sample data for the recent orders requests table
@@ -73,16 +82,24 @@ export default function DashboardHome() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quotationData, setQuotationData] = useState<QuotationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    pendingQuotations: 0,
+    activeShipments: 18,
+    deliveredProducts: 182,
+    totalSpend: 234500
+  });
   const router = useRouter();
 
-  // Fetch real quotation data from Supabase
+  // Fetch real quotation data and metrics from Supabase
   useEffect(() => {
-    async function fetchQuotations() {
+    async function fetchData() {
       try {
         setIsLoading(true);
+        
+        // Fetch quotations for the table
         const { data, error } = await supabase
           .from('quotations')
-          .select('id, quotation_id, product_name, quantity, created_at, status')
+          .select('id, quotation_id, product_name, quantity, created_at, status, product_images')
           .order('created_at', { ascending: false })
           .limit(3);
           
@@ -96,22 +113,41 @@ export default function DashboardHome() {
           id: item.quotation_id,
           product: {
             name: item.product_name,
-            image: "/images/product/product-01.jpg" // Default image
+            // Use the first image from product_images array
+            image: (item.product_images && item.product_images.length > 0) 
+              ? item.product_images[0] 
+              : "/images/product/product-01.jpg"
           },
           quantity: `${item.quantity} units`,
           date: new Date(item.created_at).toLocaleDateString(),
-          status: item.status
+          status: item.status,
+          hasImage: !!(item.product_images && item.product_images.length > 0)
         }));
         
         setQuotationData(formattedData);
+        
+        // Fetch pending quotations count
+        const { count: pendingCount, error: pendingError } = await supabase
+          .from('quotations')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'Pending');
+          
+        if (!pendingError && pendingCount !== null) {
+          setMetrics(prev => ({
+            ...prev,
+            pendingQuotations: pendingCount
+          }));
+        } else if (pendingError) {
+          console.error("Error fetching pending quotations:", pendingError);
+        }
       } catch (error) {
-        console.error("Exception fetching quotations:", error);
+        console.error("Exception fetching data:", error);
       } finally {
         setIsLoading(false);
       }
     }
     
-    fetchQuotations();
+    fetchData();
   }, [isModalOpen]); // Refetch when modal closes (possibly after creating a new quote)
 
   const openModal = () => setIsModalOpen(true);
@@ -138,7 +174,7 @@ export default function DashboardHome() {
                   Quotation Pending
                 </span>
                 <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                  24
+                  {metrics.pendingQuotations}
                 </h4>
               </div>
               <Badge color="warning">
@@ -159,7 +195,7 @@ export default function DashboardHome() {
                   Active Shipments
                 </span>
                 <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                  18
+                  {metrics.activeShipments}
                 </h4>
               </div>
               <Badge color="success">
@@ -180,7 +216,7 @@ export default function DashboardHome() {
                   Delivered Products
                 </span>
                 <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                  182
+                  {metrics.deliveredProducts}
                 </h4>
               </div>
               <Badge color="success">
@@ -201,7 +237,7 @@ export default function DashboardHome() {
                   Total Spend
                 </span>
                 <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                  $234,500
+                  ${metrics.totalSpend.toLocaleString()}
                 </h4>
               </div>
               <Badge color="success">
@@ -284,7 +320,7 @@ export default function DashboardHome() {
                   {isLoading && (
                     <TableRow>
                       <TableCell className="px-5 py-4 text-gray-500 text-center">
-                        Loading latest quotations...
+                        <div className="w-full text-center">Loading latest quotations...</div>
                       </TableCell>
                     </TableRow>
                   )}
@@ -292,7 +328,7 @@ export default function DashboardHome() {
                   {!isLoading && quotationData.length === 0 && (
                     <TableRow>
                       <TableCell className="px-5 py-4 text-gray-500 text-center">
-                        No quotations found
+                        <div className="w-full text-center">No quotations found</div>
                       </TableCell>
                     </TableRow>
                   )}
@@ -307,14 +343,20 @@ export default function DashboardHome() {
                       </TableCell>
                       <TableCell className="px-5 py-4 text-start">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 overflow-hidden rounded-lg">
-                            <Image
-                              width={40}
-                              height={40}
-                              src={item.product.image}
-                              alt={item.product.name}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="w-10 h-10 overflow-hidden rounded-lg relative">
+                            {item.hasImage ? (
+                              <Image
+                                width={40}
+                                height={40}
+                                src={item.product.image}
+                                alt={item.product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                                No image
+                              </div>
+                            )}
                           </div>
                           <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                             {item.product.name}

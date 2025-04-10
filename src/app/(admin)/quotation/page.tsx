@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import React from "react";
 import { 
   Table, 
@@ -14,15 +14,7 @@ import Badge from "@/components/ui/badge/Badge";
 import Image from "next/image";
 import QuotationFormModal from "@/components/quotation/QuotationFormModal";
 import QuotationDetailsModal from "@/components/quotation/QuotationDetailsModal";
-
-// Sample product images
-const productImages = [
-  "/images/product/product-01.jpg",
-  "/images/product/product-02.jpg",
-  "/images/product/product-03.jpg",
-  "/images/product/product-04.jpg",
-  "/images/product/product-05.jpg",
-];
+import { supabase } from "@/lib/supabase";
 
 // Define a proper type for the quotation object
 interface PriceOption {
@@ -51,120 +43,133 @@ interface QuotationData {
   shippingMethod: string;
   destination: string;
   priceOptions?: PriceOption[];
+  hasImage?: boolean;
 }
 
-// Sample quotation data
-const quotationData: QuotationData[] = [
-  {
-    id: "QT-2024-001",
-    product: {
-      name: "Industrial Water Pump",
-      image: productImages[0],
-      category: "Industrial Equipment",
-      description: "Industrial grade water pump designed for heavy-duty applications. Suitable for commercial and industrial usage with high pressure capabilities."
-    },
-    quantity: "50 units",
-    date: "2024-03-10",
-    status: "Pending",
-    shippingMethod: "Sea Freight",
-    destination: "Shanghai, China",
-    priceOptions: []  // Empty because it's pending and waiting for supplier prices
-  },
-  {
-    id: "QT-2024-002",
-    product: {
-      name: "CNC Machine Parts",
-      image: productImages[1],
-      category: "Manufacturing",
-      description: "Precision CNC machine components for industrial automation systems."
-    },
-    quantity: "200 units",
-    date: "2024-03-12",
-    status: "Pending",
-    shippingMethod: "Air Freight",
-    destination: "Berlin, Germany",
-    priceOptions: [] // Empty like Industrial Water Pump
-  },
-  {
-    id: "QT-2024-003",
-    product: {
-      name: "Electric Motors",
-      image: productImages[2],
-      category: "Electrical Components",
-      description: "High-efficiency electric motors for various industrial applications.",
-      unitGrossWeight: "45 kg per unit" // Add Unit Gross Weight for approved items
-    },
-    quantity: "30 units",
-    date: "2024-03-15",
-    status: "Approved",
-    price: "$15,200",
-    shippingMethod: "Sea Freight",
-    destination: "New York, USA",
-    priceOptions: [
-      { 
-        id: "standard", 
-        price: "USD 13,000", 
-        supplier: "Standard Supplier", 
-        deliveryTime: "4-6 weeks",
-        description: "Standard model with basic features",
-        modelName: "Standard Model",
-        modelImage: "/images/product/product-01.jpg"
-      },
-      { 
-        id: "premium", 
-        price: "USD 15,000", 
-        supplier: "Premium Supplier Co.", 
-        deliveryTime: "3-5 weeks",
-        description: "Premium model with optimizers for better performance",
-        modelName: "Premium Model with Optimizers",
-        modelImage: "/images/product/product-02.jpg"
-      },
-      { 
-        id: "premium-warranty", 
-        price: "USD 16,500", 
-        supplier: "Premium Supplier Co.", 
-        deliveryTime: "3-5 weeks",
-        description: "Premium model with extended warranty and priority support",
-        modelName: "Premium Model with Extended Warranty",
-        modelImage: "/images/product/product-03.jpg"
-      }
-    ]
-  },
-  {
-    id: "QT-2024-004",
-    product: {
-      name: "Solar Panels",
-      image: productImages[3],
-      category: "Renewable Energy",
-      unitGrossWeight: "22 kg per panel" // Add Unit Gross Weight for approved items
-    },
-    quantity: "100 units",
-    date: "2024-03-18",
-    status: "Rejected",
-    price: "$22,500",
-    shippingMethod: "Sea Freight",
-    destination: "Cape Town, South Africa"
-  },
-  {
-    id: "QT-2024-005",
-    product: {
-      name: "Conveyor Systems",
-      image: productImages[4],
-      category: "Material Handling",
-    },
-    quantity: "5 units",
-    date: "2024-03-20",
-    status: "Pending",
-    shippingMethod: "Train Freight",
-    destination: "Paris, France",
-    priceOptions: [] // Empty like Industrial Water Pump
-  }
-];
+// Metrics interface
+interface QuotationMetrics {
+  total: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+}
 
 export default function QuotationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationData | null>(null);
+  const [quotationData, setQuotationData] = useState<QuotationData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<QuotationMetrics>({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0
+  });
+
+  // Fetch quotation data and metrics from Supabase
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setIsLoading(true);
+        
+        // Fetch quotations for the table
+        const { data, error } = await supabase
+          .from('quotations')
+          .select('id, quotation_id, product_name, quantity, created_at, status, shipping_method, destination_country, destination_city, product_images, service_type, alibaba_url')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error("Error fetching quotations:", error);
+          return;
+        }
+        
+        // Transform data to match the format expected by the component
+        const formattedData = data.map(item => {
+          // Check if the image URL is valid and format it correctly
+          let imageUrl = "/images/product/product-01.jpg"; // Default fallback image
+          let hasValidImage = false;
+          
+          if (item.product_images && item.product_images.length > 0) {
+            const rawImageUrl = item.product_images[0];
+            
+            if (rawImageUrl) {
+              // Check if URL is valid
+              try {
+                // For relative URLs in the public folder
+                if (rawImageUrl.startsWith('/')) {
+                  imageUrl = rawImageUrl;
+                  hasValidImage = true;
+                } 
+                // For full Supabase storage URLs
+                else if (rawImageUrl.includes('supabase.co/storage/v1/object/public')) {
+                  new URL(rawImageUrl); // Validate
+                  imageUrl = rawImageUrl;
+                  hasValidImage = true;
+                }
+                // For Supabase storage filename only (no URL structure)
+                else if (!rawImageUrl.includes('://') && !rawImageUrl.startsWith('/')) {
+                  // This appears to be just a filename, use a local fallback image
+                  // We can't construct a Supabase URL without knowing the bucket name
+                  imageUrl = "/images/product/product-01.jpg";
+                  hasValidImage = false;
+                }
+                // For valid URLs with protocol
+                else if ((rawImageUrl.startsWith('http://') || rawImageUrl.startsWith('https://'))) {
+                  new URL(rawImageUrl); // Validate
+                  imageUrl = rawImageUrl;
+                  hasValidImage = true;
+                }
+              } catch (e) {
+                console.warn("Invalid image URL:", rawImageUrl, e);
+                imageUrl = "/images/product/product-01.jpg";
+                hasValidImage = false;
+              }
+            }
+          }
+          
+          return {
+            id: item.quotation_id || `QT-${item.id}`,
+            product: {
+              name: item.product_name,
+              image: imageUrl,
+              category: item.service_type || "Uncategorized",
+              description: item.alibaba_url ? `Reference URL: ${item.alibaba_url}` : undefined
+            },
+            quantity: `${item.quantity} units`,
+            date: new Date(item.created_at).toLocaleDateString(),
+            status: item.status || "Pending",
+            price: undefined,
+            shippingMethod: item.shipping_method || "Sea Freight",
+            destination: `${item.destination_city || ""}, ${item.destination_country || ""}`.trim().replace(/^,\s*/, ""),
+            priceOptions: [],
+            hasImage: hasValidImage
+          };
+        });
+        
+        setQuotationData(formattedData);
+        
+        // Calculate metrics
+        const total = data.length;
+        const approved = data.filter(item => item.status === "Approved").length;
+        const pending = data.filter(item => item.status === "Pending").length;
+        const rejected = data.filter(item => item.status === "Rejected").length;
+        
+        setMetrics({
+          total,
+          approved,
+          pending,
+          rejected
+        });
+      } catch (error) {
+        console.error("Exception fetching data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchData();
+  }, [isModalOpen]); // Refetch when modal closes (possibly after creating a new quote)
 
   // Check if there are any approved quotations
   const hasApprovedQuotations = quotationData.some(item => item.status === "Approved");
@@ -236,7 +241,7 @@ export default function QuotationPage() {
                 Total Quotes
               </span>
               <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                126
+                {metrics.total}
               </h4>
             </div>
           </div>
@@ -254,7 +259,7 @@ export default function QuotationPage() {
                 Approved Quotes
               </span>
               <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                85
+                {metrics.approved}
               </h4>
             </div>
           </div>
@@ -278,7 +283,7 @@ export default function QuotationPage() {
                 Pending Quotes
               </span>
               <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                32
+                {metrics.pending}
               </h4>
             </div>
           </div>
@@ -296,7 +301,7 @@ export default function QuotationPage() {
                 Rejected Quotes
               </span>
               <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                9
+                {metrics.rejected}
               </h4>
             </div>
           </div>
@@ -397,7 +402,35 @@ export default function QuotationPage() {
 
                 {/* Table Body */}
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                  {quotationData.map((item) => (
+                  {isLoading && (
+                    <TableRow>
+                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                        <div className="w-full text-center">Loading quotations...</div>
+                      </TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                    </TableRow>
+                  )}
+                  
+                  {!isLoading && quotationData.length === 0 && (
+                    <TableRow>
+                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                        <div className="w-full text-center">No quotations found</div>
+                      </TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                      <TableCell>{""}</TableCell>
+                    </TableRow>
+                  )}
+                  
+                  {!isLoading && quotationData.map((item) => (
                     <TableRow 
                       key={item.id}
                       className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
@@ -407,14 +440,20 @@ export default function QuotationPage() {
                       </TableCell>
                       <TableCell className="px-5 py-4 text-start">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 overflow-hidden rounded-lg">
-                            <Image
-                              width={40}
-                              height={40}
-                              src={item.product.image}
-                              alt={item.product.name}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="w-10 h-10 overflow-hidden rounded-lg relative">
+                            {item.hasImage ? (
+                              <Image
+                                width={40}
+                                height={40}
+                                src={item.product.image}
+                                alt={item.product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                                No image
+                              </div>
+                            )}
                           </div>
                           <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                             {item.product.name}
@@ -478,7 +517,7 @@ export default function QuotationPage() {
           {/* Pagination */}
           <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-white/[0.05]">
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Showing 1-5 of 126 items
+              Showing 1-{quotationData.length} of {metrics.total} items
             </div>
             <div className="flex gap-1">
               <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-700 dark:hover:bg-white/[0.05]" disabled>
