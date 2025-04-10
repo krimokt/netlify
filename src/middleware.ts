@@ -12,7 +12,8 @@ const debugRoutes = [
   '/quotation',
   '/order',
   '/payment',
-  '/shipment-tracking'
+  '/shipment-tracking',
+  '/checkoutpage',
 ];
 
 // Routes that should be accessible without authentication (static assets, etc.)

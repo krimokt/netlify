@@ -74,18 +74,46 @@ export default function QuotationPage() {
         setIsLoading(true);
         
         // Fetch quotations for the table
-        const { data, error } = await supabase
+        const { data: quotationsData, error: quotationsError } = await supabase
           .from('quotations')
           .select('id, quotation_id, product_name, quantity, created_at, status, shipping_method, destination_country, destination_city, product_images, service_type, alibaba_url')
           .order('created_at', { ascending: false });
           
-        if (error) {
-          console.error("Error fetching quotations:", error);
+        if (quotationsError) {
+          console.error("Error fetching quotations:", quotationsError);
           return;
         }
         
+        // Fetch all price options
+        const { data: priceOptionsData, error: priceOptionsError } = await supabase
+          .from('price_options')
+          .select('*');
+          
+        if (priceOptionsError) {
+          console.error("Error fetching price options:", priceOptionsError);
+        }
+        
+        // Create a map of quotation IDs to their price options
+        const priceOptionsMap = new Map();
+        if (priceOptionsData) {
+          priceOptionsData.forEach(option => {
+            if (!priceOptionsMap.has(option.quotation_ref_id)) {
+              priceOptionsMap.set(option.quotation_ref_id, []);
+            }
+            priceOptionsMap.get(option.quotation_ref_id).push({
+              id: option.id,
+              price: `$${parseFloat(option.price).toLocaleString()}`,
+              supplier: option.supplier,
+              deliveryTime: option.delivery_time,
+              description: option.description,
+              modelName: option.name,
+              modelImage: option.image || "/images/product/product-01.jpg"
+            });
+          });
+        }
+        
         // Transform data to match the format expected by the component
-        const formattedData = data.map(item => {
+        const formattedData = quotationsData.map(item => {
           // Check if the image URL is valid and format it correctly
           let imageUrl = "/images/product/product-01.jpg"; // Default fallback image
           let hasValidImage = false;
@@ -109,10 +137,10 @@ export default function QuotationPage() {
                 }
                 // For Supabase storage filename only (no URL structure)
                 else if (!rawImageUrl.includes('://') && !rawImageUrl.startsWith('/')) {
-                  // This appears to be just a filename, use a local fallback image
-                  // We can't construct a Supabase URL without knowing the bucket name
-                  imageUrl = "/images/product/product-01.jpg";
-                  hasValidImage = false;
+                  // This appears to be just a filename, construct the full Supabase URL
+                  // Based on the file pattern in the database results
+                  imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${rawImageUrl}`;
+                  hasValidImage = true;
                 }
                 // For valid URLs with protocol
                 else if ((rawImageUrl.startsWith('http://') || rawImageUrl.startsWith('https://'))) {
@@ -128,6 +156,19 @@ export default function QuotationPage() {
             }
           }
           
+          // Get price options for this quotation
+          const priceOptions = priceOptionsMap.get(item.id) || [];
+          
+          // Calculate average price if there are price options
+          let price;
+          if (priceOptions.length > 0) {
+            const average = priceOptions.reduce((sum: number, option: PriceOption) => {
+              const numericPrice = parseFloat(option.price.replace(/[$,]/g, ''));
+              return sum + numericPrice;
+            }, 0) / priceOptions.length;
+            price = `$${average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          }
+          
           return {
             id: item.quotation_id || `QT-${item.id}`,
             product: {
@@ -139,10 +180,10 @@ export default function QuotationPage() {
             quantity: `${item.quantity} units`,
             date: new Date(item.created_at).toLocaleDateString(),
             status: item.status || "Pending",
-            price: undefined,
+            price: price,
             shippingMethod: item.shipping_method || "Sea Freight",
             destination: `${item.destination_city || ""}, ${item.destination_country || ""}`.trim().replace(/^,\s*/, ""),
-            priceOptions: [],
+            priceOptions: priceOptions,
             hasImage: hasValidImage
           };
         });
@@ -150,10 +191,10 @@ export default function QuotationPage() {
         setQuotationData(formattedData);
         
         // Calculate metrics
-        const total = data.length;
-        const approved = data.filter(item => item.status === "Approved").length;
-        const pending = data.filter(item => item.status === "Pending").length;
-        const rejected = data.filter(item => item.status === "Rejected").length;
+        const total = quotationsData.length;
+        const approved = quotationsData.filter(item => item.status === "Approved").length;
+        const pending = quotationsData.filter(item => item.status === "Pending").length;
+        const rejected = quotationsData.filter(item => item.status === "Rejected").length;
         
         setMetrics({
           total,

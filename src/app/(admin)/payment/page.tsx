@@ -1,833 +1,874 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import React from "react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
-import { Modal } from "@/components/ui/modal";
-import { CloseIcon } from "@/icons";
-import { useModal } from "@/hooks/useModal";
 
-// Sample payment data
-const paymentData = [
-  {
-    id: "MES-00001",
-    orderId: "MES-00001",
-    amount: "$12,500",
-    method: "Bank Transfer",
-    date: "2023-12-15",
-    status: "Completed",
-    client: {
-      name: "Acme Industries",
-      email: "contact@acme.com"
-    },
-    invoiceNo: "INV-2023-001"
-  },
-  {
-    id: "MES-00002",
-    orderId: "MES-00002",
-    amount: "$8,750",
-    method: "Bank Transfer",
-    date: "2023-12-18",
-    status: "Completed",
-    client: {
-      name: "Global Manufacturing",
-      email: "orders@globalmanufacturing.com"
-    },
-    invoiceNo: "INV-2023-002"
-  },
-  {
-    id: "MES-00003",
-    orderId: "MES-00003",
-    amount: "$15,200",
-    method: "Bank Transfer",
-    date: "2023-12-20",
-    status: "Completed",
-    client: {
-      name: "Tech Solutions Inc.",
-      email: "procurement@techsolutions.com"
-    },
-    invoiceNo: "INV-2023-003"
-  },
-  {
-    id: "MES-00004",
-    orderId: "MES-00004",
-    amount: "$22,500",
-    method: "Bank Transfer",
-    date: "2023-12-22",
-    status: "Pending",
-    client: {
-      name: "Electron Devices",
-      email: "supplies@electrondevices.com"
-    },
-    invoiceNo: "INV-2023-004"
-  },
-  {
-    id: "MES-00005",
-    orderId: "MES-00005",
-    amount: "$5,800",
-    method: "Bank Transfer",
-    date: "2023-12-25",
-    status: "Rejected",
-    client: {
-      name: "Construction Partners",
-      email: "materials@constructionpartners.com"
-    },
-    invoiceNo: "INV-2023-005"
-  }
-];
-
-// Define payment data type
-interface PaymentDataType {
+interface PaymentInfo {
   id: string;
-  orderId: string;
-  amount: string;
-  method: string;
+  amount: number;
+  status: "pending" | "processing" | "completed" | "failed";
   date: string;
+  quotations: string[];
+  paymentMethod: string;
+  referenceNumber: string;
+  proofUrl?: string;
+}
+
+interface QuotationInfo {
+  id: string;
+  product_name: string;
+  quantity: string;
   status: string;
-  client: {
-    name: string;
-    email: string;
-  };
-  invoiceNo: string;
+  created_at: string;
+  product_images: string[];
+  hasImage?: boolean;
+  imageUrl?: string;
 }
 
 export default function PaymentPage() {
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [showStatusAlert, setShowStatusAlert] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentDataType | null>(null);
-  const { isOpen: isPaymentModalOpen, openModal: openPaymentModal, closeModal: closePaymentModal } = useModal();
-  const [selectedBank, setSelectedBank] = useState<string | null>(null);
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [payments, setPayments] = useState<PaymentInfo[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [quotationsMap, setQuotationsMap] = useState<Record<string, QuotationInfo[]>>({});
+  const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [currentPaymentId, setCurrentPaymentId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedProofUrl, setExpandedProofUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get status from URL parameter
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get('status');
+    const fetchUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        
+        setUser(user);
+        return user;
+      } catch (error: any) {
+        setError(error.message);
+        return null;
+      }
+    };
+
+    const fetchPayments = async (userId: string) => {
+      try {
+        // Fetch payments from Supabase
+        const { data, error } = await supabase
+          .from('payments')
+          .select(`
+            id,
+            amount,
+            status,
+            created_at,
+            quotation_ids,
+            payment_method,
+            reference_number,
+            payment_proof_url
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        // Format the payment data
+        const formattedPayments = data.map((payment: any) => ({
+          id: payment.id,
+          amount: payment.amount,
+          status: payment.status,
+          date: new Date(payment.created_at).toLocaleDateString(),
+          quotations: payment.quotation_ids || [],
+          paymentMethod: payment.payment_method,
+          referenceNumber: payment.reference_number,
+          proofUrl: payment.payment_proof_url
+        }));
+
+        setPayments(formattedPayments);
+        
+        // Fetch quotation details for all payments
+        await fetchQuotationDetails(formattedPayments);
+      } catch (error: any) {
+        setError(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const fetchQuotationDetails = async (paymentsData: PaymentInfo[]) => {
+      try {
+        // Collect all quotation IDs
+        const allQuotationIds = paymentsData.flatMap(payment => payment.quotations);
     
-    if (status) {
-      setStatusFilter(status);
-      setShowStatusAlert(true);
-      
-      // Clear the URL parameter after a delay
-      setTimeout(() => {
-        window.history.replaceState({}, '', '/payment');
-      }, 5000);
-    }
-  }, []);
+        if (allQuotationIds.length === 0) return;
+        
+        // Log quotation IDs for debugging
+        console.log("Quotation IDs before filtering:", allQuotationIds);
+        
+        // UUID validation regex
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        
+        // Filter out any invalid IDs - must be valid UUIDs
+        const validQuotationIds = allQuotationIds.filter(id => {
+          if (!id || typeof id !== 'string') return false;
+          // Test if it's a valid UUID format
+          return uuidRegex.test(id.trim());
+        });
+        
+        if (validQuotationIds.length === 0) {
+          console.warn("No valid UUID quotation IDs found. Original IDs:", allQuotationIds);
+          const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
+          paymentsData.forEach(payment => {
+            emptyQuotationsByPayment[payment.id] = [];
+          });
+          setQuotationsMap(emptyQuotationsByPayment);
+          return;
+        }
+        
+        console.log(`Found ${validQuotationIds.length} valid UUIDs out of ${allQuotationIds.length} quotation IDs`);
+        
+        // Split IDs into smaller batches to avoid Supabase limitations
+        const batchSize = 10; // Smaller batch size
+        const quotationsById: Record<string, any> = {};
+        
+        // Process each batch individually
+        for (let i = 0; i < validQuotationIds.length; i += batchSize) {
+          const batch = validQuotationIds.slice(i, i + batchSize);
+          const batchNumber = Math.floor(i/batchSize) + 1;
+          
+          console.log(`Processing batch ${batchNumber} with ${batch.length} UUIDs:`, batch);
+          
+          try {
+            // Use a simpler query approach - fetch one by one if needed
+            for (const quotationId of batch) {
+              try {
+                const { data, error } = await supabase
+                  .from('quotations')
+                  .select(`
+                    id,
+                    quotation_id,
+                    product_name,
+                    quantity, 
+                    status,
+                    created_at,
+                    product_images
+                  `)
+                  .eq('id', quotationId)
+                  .single();
+                
+                if (error) {
+                  // Log specific error for this quotation and continue
+                  console.error(`Error fetching quotation ${quotationId}:`, error);
+                  continue;
+                }
+                
+                if (data) {
+                  quotationsById[quotationId] = data;
+                  console.log(`Successfully fetched quotation: ${quotationId}`);
+                }
+              } catch (singleFetchError: any) {
+                console.error(`Error in single fetch for ${quotationId}:`, singleFetchError?.message || singleFetchError);
+              }
+            }
+          } catch (batchError: any) {
+            console.error(`Error processing batch ${batchNumber}:`, batchError?.message || batchError);
+            // Continue with other batches
+          }
+        }
+        
+        // Check if we got any results
+        const quotationIds = Object.keys(quotationsById);
+        if (quotationIds.length === 0) {
+          console.warn("No quotation data retrieved after processing all batches");
+          const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
+          paymentsData.forEach(payment => {
+            emptyQuotationsByPayment[payment.id] = [];
+          });
+          setQuotationsMap(emptyQuotationsByPayment);
+          return;
+        }
+        
+        console.log(`Successfully retrieved ${quotationIds.length} quotations out of ${validQuotationIds.length} valid IDs`);
+        
+        // Process quotation data and organize by payment
+        const quotationsByPayment: Record<string, QuotationInfo[]> = {};
+        
+        paymentsData.forEach(payment => {
+          const paymentQuotations = payment.quotations
+            .filter(qId => quotationsById[qId]) // Only include quotations we found
+            .map(qId => {
+              const q = quotationsById[qId];
+              
+              // Handle image processing similar to quotation page
+              let imageUrl = "/images/product/product-01.jpg";
+              let hasImage = false;
+              
+              if (q.product_images && q.product_images.length > 0) {
+                const rawImageUrl = q.product_images[0];
+                
+                if (rawImageUrl) {
+                  try {
+                    if (rawImageUrl.startsWith('/')) {
+                      imageUrl = rawImageUrl;
+                      hasImage = true;
+                    } 
+                    else if (rawImageUrl.includes('supabase.co/storage/v1/object/public')) {
+                      imageUrl = rawImageUrl;
+                      hasImage = true;
+                    }
+                    else if (!rawImageUrl.includes('://') && !rawImageUrl.startsWith('/')) {
+                      imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${rawImageUrl}`;
+                      hasImage = true;
+                    }
+                    else if ((rawImageUrl.startsWith('http://') || rawImageUrl.startsWith('https://'))) {
+                      imageUrl = rawImageUrl;
+                      hasImage = true;
+                    }
+                  } catch (e) {
+                    console.warn("Invalid image URL:", rawImageUrl);
+                    hasImage = false;
+                  }
+                }
+              }
+              
+              return {
+                id: q.quotation_id || `QT-${q.id}`,
+                product_name: q.product_name,
+                quantity: q.quantity,
+                status: q.status,
+                created_at: new Date(q.created_at).toLocaleDateString(),
+                product_images: q.product_images || [],
+                hasImage,
+                imageUrl
+              };
+            });
+            
+          quotationsByPayment[payment.id] = paymentQuotations;
+        });
+        
+        setQuotationsMap(quotationsByPayment);
+      } catch (error: any) {
+        // Enhanced error logging with message and stack trace
+        console.error("Error fetching quotation details:", error?.message || "Unknown error");
+        if (error?.stack) {
+          console.error("Stack trace:", error.stack);
+        }
+        
+        // Create empty mapping to avoid UI errors
+        const emptyQuotationsByPayment: Record<string, QuotationInfo[]> = {};
+        paymentsData.forEach(payment => {
+          emptyQuotationsByPayment[payment.id] = [];
+        });
+        setQuotationsMap(emptyQuotationsByPayment);
+      }
+    };
 
-  // Function to handle contact support
-  const handleContactSupport = () => {
-    window.open('mailto:support@example.com', '_blank');
-  };
+    const init = async () => {
+      const user = await fetchUser();
+      if (user) {
+        await fetchPayments(user.id);
+      }
+    };
 
-  const getStatusBadgeColor = (status: string): "primary" | "success" | "warning" | "info" | "error" => {
+    init();
+  }, [router, supabase]);
+
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case "Completed":
-        return "success";
-      case "Pending":
-        return "warning";
-      case "Rejected":
-        return "error";
+      case 'completed':
+        return 'success';
+      case 'processing':
+        return 'warning';
+      case 'pending':
+        return 'primary';
+      case 'failed':
+        return 'error';
       default:
-        return "primary";
+        return 'light';
     }
   };
 
-  // Handle view payment details
-  const handleViewPayment = (payment: PaymentDataType) => {
-    setSelectedPayment(payment);
-    openPaymentModal();
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Approved';
+      case 'processing':
+        return 'Processing';
+      case 'pending':
+        return 'Awaiting Admin Approval';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
+    }
   };
 
-  // Handle bank selection
-  const handleBankSelection = (bank: string) => {
-    setSelectedBank(bank);
+  const handleUploadProof = async (paymentId: string) => {
+    setCurrentPaymentId(paymentId);
+    setIsUploadModalOpen(true);
+    setUploadSuccess(false);
+    setUploadError(null);
   };
 
-  // Handle download invoice
-  const handleDownloadInvoice = (payment: PaymentDataType) => {
-    // Create a simple invoice content
-    const invoiceContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>Invoice ${payment.invoiceNo}</title>
-      <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 40px; color: #333; }
-        .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); }
-        .invoice-box table { width: 100%; line-height: 1.6; text-align: left; }
-        .invoice-box table td { padding: 5px; vertical-align: top; }
-        .invoice-box table tr.top table td { padding-bottom: 20px; }
-        .invoice-box table tr.top table td.title { font-size: 45px; color: #0D47A1; }
-        .invoice-box table tr.information table td { padding-bottom: 40px; }
-        .invoice-box table tr.heading td { background: #eee; border-bottom: 1px solid #ddd; font-weight: bold; }
-        .invoice-box table tr.details td { padding-bottom: 20px; }
-        .invoice-box table tr.item td { border-bottom: 1px solid #eee; }
-        .invoice-box table tr.item.last td { border-bottom: none; }
-        .invoice-box table tr.total td:nth-child(2) { font-weight: bold; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-box">
-        <table cellpadding="0" cellspacing="0">
-          <tr class="top">
-            <td colspan="2">
-              <table>
-                <tr>
-                  <td class="title">
-                    morocco ecom source
-                  </td>
-                  <td class="text-right">
-                    Invoice #: ${payment.invoiceNo}<br>
-                    Payment ID: ${payment.id}<br>
-                    Date: ${payment.date}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          
-          <tr class="information">
-            <td colspan="2">
-              <table>
-                <tr>
-                  <td>
-                    MES, Inc.<br>
-                    12345 Business Park<br>
-                    Casablanca, Morocco
-                  </td>
-                  <td class="text-right">
-                    ${payment.client.name}<br>
-                    ${payment.client.email}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          
-          <tr class="heading">
-            <td>Payment Method</td>
-            <td class="text-right">Amount</td>
-          </tr>
-          
-          <tr class="details">
-            <td>${payment.method}</td>
-            <td class="text-right">${payment.amount}</td>
-          </tr>
-          
-          <tr class="heading">
-            <td>Item</td>
-            <td class="text-right">Price</td>
-          </tr>
-          
-          <tr class="item">
-            <td>Industrial Equipment Order #${payment.orderId}</td>
-            <td class="text-right">${payment.amount}</td>
-          </tr>
-          
-          <tr class="total">
-            <td></td>
-            <td class="text-right">Total: ${payment.amount}</td>
-          </tr>
-        </table>
-        <div class="text-center" style="margin-top: 40px; color: #888;">
-          <p>Thank you for your business!</p>
+  const closeUploadModal = () => {
+    setIsUploadModalOpen(false);
+    setCurrentPaymentId(null);
+    setUploadSuccess(false);
+    setUploadError(null);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Reset states when a new file is selected
+    setUploadSuccess(false);
+    setUploadError(null);
+  };
+
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentPaymentId) {
+      setUploadError("Payment ID is missing.");
+      return;
+    }
+    
+    const files = fileInputRef.current?.files;
+    if (!files || files.length === 0) {
+      setUploadError("Please select a file to upload.");
+      return;
+    }
+    
+    const file = files[0];
+    // Basic validation for file type and size
+    if (!file.type.includes('image/') && !file.type.includes('application/pdf')) {
+      setUploadError("Please upload an image or PDF file.");
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setUploadError("File size should be less than 5MB.");
+      return;
+    }
+    
+    setIsUploading(true);
+    setUploadError(null);
+    
+    try {
+      // Generate a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `payment-proof-${currentPaymentId}-${Date.now()}.${fileExt}`;
+      const filePath = `payment-proofs/${fileName}`; // Store in a subfolder within quotation-images bucket
+      
+      // Upload to Supabase Storage - using quotation-images bucket which already exists
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('quotation-images') // Use existing bucket instead of payment-proofs
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from('quotation-images') // Use same bucket for URL
+        .getPublicUrl(filePath);
+        
+      const publicUrl = urlData.publicUrl;
+      
+      // Update payment record with proof URL
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update({
+          payment_proof_url: publicUrl,
+          status: 'processing', // Change status from pending to processing
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentPaymentId);
+        
+      if (updateError) {
+        throw updateError;
+      }
+      
+      // Update local state for the modified payment
+      setPayments(prevPayments => 
+        prevPayments.map(payment => 
+          payment.id === currentPaymentId 
+            ? { 
+                ...payment, 
+                status: 'processing',
+                proofUrl: publicUrl
+              } 
+            : payment
+        )
+      );
+      
+      setUploadSuccess(true);
+      
+      // Close modal after short delay to show success message
+      setTimeout(() => {
+        closeUploadModal();
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error("Error uploading proof:", error);
+      setUploadError(error.message || "Failed to upload payment proof.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const toggleExpandPayment = (paymentId: string) => {
+    if (expandedPayment === paymentId) {
+      setExpandedPayment(null);
+    } else {
+      setExpandedPayment(paymentId);
+    }
+  };
+
+  // Add a function to handle the payment proof preview
+  const openProofPreview = (url: string) => {
+    setExpandedProofUrl(url);
+  };
+
+  const closeProofPreview = () => {
+    setExpandedProofUrl(null);
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-t-4 border-t-blue-500 border-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading payment history...</p>
         </div>
       </div>
-    </body>
-    </html>
-    `;
+    );
+  }
 
-    // Create a blob and download link
-    const blob = new Blob([invoiceContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice-${payment.invoiceNo}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 mx-auto my-8 max-w-3xl">
+        <h2 className="text-red-700 font-semibold text-lg mb-3">Error</h2>
+        <p className="text-red-600">{error}</p>
+        <Button
+          variant="primary"
+          className="mt-4 bg-red-600 hover:bg-red-700"
+          onClick={() => router.push('/dashboard-home')}
+        >
+          Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
+
+  // Add this before the return statement to fix interface
+  // to include proofUrl for full type safety
+  const getPaymentById = (id: string) => {
+    return payments.find(payment => payment.id === id);
   };
 
   return (
-    <div className="grid grid-cols-12 gap-4 md:gap-6">
-      {/* Status Alert Notification */}
-      {showStatusAlert && (
-        <div className="col-span-12">
-          {statusFilter === 'pending' && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 rounded-md">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mt-0.5">
-                  <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">Payment Pending Approval</h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p>Your payment is being processed and needs approval from our support team. Please complete the bank transfer and submit a receipt to expedite the process.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {statusFilter === 'approved' && (
-            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4 rounded-md">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mt-0.5">
-                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-green-800">Payment Approved</h3>
-                  <div className="mt-2 text-sm text-green-700">
-                    <p>Your payment has been approved and processed successfully. You can view the transaction details below.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {statusFilter === 'rejected' && (
-            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4 rounded-md">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mt-0.5">
-                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Payment Rejected</h3>
-                  <div className="mt-2 text-sm text-red-700">
-                    <p>Your payment could not be processed. Please contact our support team for assistance.</p>
-                    <div className="mt-4">
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        onClick={handleContactSupport}
-                      >
-                        Contact Support
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Page Header Section */}
-      <div className="col-span-12">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-white/90">
-            Payment Management
+          Payment History
           </h1>
-        </div>
+        <Link href="/checkoutpage">
+          <Button variant="primary" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
+            Make New Payment
+          </Button>
+        </Link>
       </div>
 
-      {/* Payment Summary Cards */}
-      <div className="col-span-12">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-          {/* Total Revenue */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 1V23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M17 5H9.5C8.57174 5 7.6815 5.36875 7.02513 6.02513C6.36875 6.6815 6 7.57174 6 8.5C6 9.42826 6.36875 10.3185 7.02513 10.9749C7.6815 11.6313 8.57174 12 9.5 12H14.5C15.4283 12 16.3185 12.3687 16.9749 13.0251C17.6313 13.6815 18 14.5717 18 15.5C18 16.4283 17.6313 17.3185 16.9749 17.9749C16.3185 18.6313 15.4283 19 14.5 19H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+      {payments.length === 0 ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h2 className="text-blue-700 font-semibold text-lg mb-3">No Payments Found</h2>
+          <p className="text-blue-600 mb-4">You haven't made any payments yet.</p>
+          <Link href="/quotation">
+            <Button variant="primary" className="bg-blue-600 hover:bg-blue-700">
+              View Quotations
+            </Button>
+          </Link>
             </div>
-            <div className="mt-5">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Total Revenue
-              </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                $64,750
-              </h4>
-            </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+              Recent Payments
+            </h2>
           </div>
 
-          {/* Completed Payments */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 11L12 14L22 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 12V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div className="mt-5">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Completed Payments
-              </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                78
-              </h4>
-            </div>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {payments.map((payment) => (
+              <div key={payment.id} className="p-5">
+                <div className="flex flex-col md:flex-row justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-gray-900 dark:text-white">
+                        Payment #{payment.id.slice(-6)}
+                      </h3>
+                      <Badge color={getStatusColor(payment.status)}>{getStatusText(payment.status)}</Badge>
           </div>
 
-          {/* Pending Payments */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M12 18V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4.93 4.93L7.76 7.76" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16.24 16.24L19.07 19.07" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M18 12H22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4.93 19.07L7.76 16.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16.24 7.76L19.07 4.93" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div className="mt-5">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Pending Payments
-              </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                15
-              </h4>
-            </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <p>Date: {payment.date}</p>
+                      <p>Payment Method: {payment.paymentMethod}</p>
+                      {payment.referenceNumber && (
+                        <p>Reference: {payment.referenceNumber}</p>
+                      )}
           </div>
 
-          {/* Rejected Payments */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 3L14.5 21C14.4605 21.0796 14.4022 21.1474 14.3305 21.1969C14.2588 21.2464 14.1759 21.2761 14.09 21.2831C14.0041 21.29 13.9179 21.2739 13.8405 21.2364C13.763 21.1989 13.6969 21.1412 13.65 21.07L10 14L2.92996 10.35C2.85975 10.3029 2.80213 10.2368 2.76464 10.1594C2.72715 10.0819 2.71091 9.99582 2.71791 9.90992C2.7249 9.82402 2.75454 9.74117 2.80401 9.66948C2.85349 9.59779 2.9213 9.53942 3.00001 9.5L21 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    {/* Payment proof thumbnail - if available */}
+                    {payment.proofUrl && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Payment Proof:
+                        </p>
+                        <div 
+                          className="inline-block max-w-[120px] border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => openProofPreview(payment.proofUrl!)}
+                        >
+                          {payment.proofUrl.toLowerCase().endsWith('.pdf') ? (
+                            <div className="bg-red-50 dark:bg-red-900/20 p-3 flex items-center justify-center">
+                              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
+                              <span className="text-xs font-medium text-red-700 dark:text-red-400 ml-1">PDF</span>
             </div>
-            <div className="mt-5">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Rejected Payments
-              </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
-                7
-              </h4>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Payment Table Section */}
-      <div className="col-span-12">
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
-              Payment Management
-            </h3>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search payments..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] w-64 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                />
-                <svg
-                  className="absolute left-3 top-2.5 text-gray-400"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M21 21L16.65 16.65"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                          ) : (
+                            <div className="relative h-20 w-20">
+                              <Image
+                                src={payment.proofUrl}
+                                alt="Payment proof"
+                                fill
+                                className="object-cover"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-20 transition-all">
+                                <svg className="w-6 h-6 text-white opacity-0 hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <Button variant="outline" size="sm" className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]">
-                Export
-              </Button>
+                            </div>
+                          )}
             </div>
           </div>
+                    )}
 
-          {/* Payment Table */}
-          <div className="max-w-full overflow-x-auto">
-            <div className="min-w-full">
-              <Table>
-                {/* Table Header */}
-                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                  <TableRow>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Payment ID
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Order ID
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Amount
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Method
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Date
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Status
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Actions
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-
-                {/* Table Body */}
-                <TableBody>
-                  {paymentData.map((payment, index) => (
-                    <TableRow
-                      key={index}
-                      className="border-b border-gray-100 last:border-b-0 dark:border-white/[0.05] dark:bg-transparent dark:text-white transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
-                    >
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        {payment.id}
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        {payment.orderId}
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm font-medium">
-                        {payment.amount}
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        {payment.method}
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        {payment.date}
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        <Badge color={getStatusBadgeColor(payment.status)} size="sm">
-                          {payment.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-gray-300"
-                            onClick={() => handleViewPayment(payment)}
+                    {payment.quotations.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                            Quotations: {payment.quotations.length}
+                          </p>
+                          <button 
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium flex items-center"
+                            onClick={() => toggleExpandPayment(payment.id)}
                           >
+                            {expandedPayment === payment.id ? (
+                              <>
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                                Hide Details
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
                             View Details
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-gray-300"
-                            onClick={() => handleDownloadInvoice(payment)}
-                          >
-                            Download
-                          </Button>
+                              </>
+                            )}
+                          </button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {payment.quotations.map((id) => (
+                            <span key={id} className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">
+                              {id.slice(-6)}
+                            </span>
+                          ))}
             </div>
           </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-end justify-between">
+                    <div className="text-right">
+                      <div className="font-bold text-lg text-gray-900 dark:text-white">
+                        ${payment.amount.toLocaleString()}
         </div>
       </div>
 
-      {/* Payment Details Modal */}
-      <Modal
-        isOpen={isPaymentModalOpen}
-        onClose={closePaymentModal}
-        showCloseButton={false}
-        className="max-w-4xl h-auto mx-auto p-0 overflow-hidden"
-      >
-        {selectedPayment && (
-          <div className="relative w-full bg-white dark:bg-gray-900 rounded-3xl animate-fade-in">
-            <div className="p-6 mb-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-[#0D47A1] dark:text-white">Payment {selectedPayment.id}</h2>
-                  <div className="flex items-center mt-1">
-                    <span className="text-sm text-gray-500">Invoice: {selectedPayment.invoiceNo}</span>
-                    <span className={`ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedPayment.status === 'Completed' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400'
-                        : selectedPayment.status === 'Pending'
-                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-400'
-                        : 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400'
-                    }`}>
-                      {selectedPayment.status}
-                    </span>
+                    {payment.status === 'pending' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => handleUploadProof(payment.id)}
+                      >
+                        Upload Proof
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <button 
-                  onClick={closePaymentModal}
-                  className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
-                >
-                  <CloseIcon className="w-6 h-6" />
-                </button>
+                
+                {/* Expanded Quotation Details */}
+                {expandedPayment === payment.id && quotationsMap[payment.id] && (
+                  <div className="mt-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Quotation Details</h4>
+                    <div className="space-y-3">
+                      {quotationsMap[payment.id].map(quotation => (
+                        <div key={quotation.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+                          <div className="p-3 flex items-start gap-3">
+                            <div className="flex-shrink-0 w-16 h-16 relative rounded overflow-hidden">
+                              {quotation.hasImage ? (
+                                <Image
+                                  src={quotation.imageUrl || "/images/product/product-01.jpg"}
+                                  alt={quotation.product_name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                                  No image
               </div>
+                              )}
             </div>
               
-            <div className="space-y-6 px-6 mb-6">
+                            <div className="flex-1">
+                              <div className="flex flex-wrap justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Information</h3>
-                <div className="grid grid-cols-12 gap-6">
-                  <div className="col-span-12 lg:col-span-4">
-                    <div className="p-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl shadow-sm">
-                      <div className="text-2xl font-bold text-[#0D47A1] dark:text-blue-400">{selectedPayment.amount}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Total Amount</div>
+                                  <h5 className="font-medium text-gray-900 dark:text-white text-sm">
+                                    {quotation.product_name}
+                                  </h5>
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      ID: {quotation.id}
+                                    </span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      Quantity: {quotation.quantity}
+                                    </span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      Date: {quotation.created_at}
+                                    </span>
+                                  </div>
+                                </div>
+                                <Badge size="sm" color={getStatusColor(quotation.status)}>
+                                  {quotation.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="col-span-12 lg:col-span-8">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment ID</span>
-                        <p className="text-gray-800 dark:text-gray-200 font-medium">{selectedPayment.id}</p>
+                )}
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Order ID</span>
-                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.orderId}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment Method</span>
-                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.method}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Payment Date</span>
-                        <p className="text-gray-800 dark:text-gray-200">{selectedPayment.date}</p>
+            ))}
                       </div>
                     </div>
+      )}
+                
+      <div className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+            Payment Information
+          </h2>
                   </div>
+        <div className="p-5">
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-2">Bank Transfer Information</h3>
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                <p className="text-sm mb-1"><strong>WISE BANK:</strong> Account Number: 123456789</p>
+                <p className="text-sm mb-1"><strong>SOCIETE GENERALE:</strong> IBAN: FR7612345678901234567890123</p>
+                <p className="text-sm mb-1"><strong>CIH BANK:</strong> Account Number: 987654321</p>
+                <p className="text-sm"><strong>PAYONEER:</strong> Email: payments@mesmorocco.com</p>
                 </div>
               </div>
                 
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Client Information</h3>
-                <div className="p-5 bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 rounded-xl">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Client Name</span>
-                      <p className="text-gray-800 dark:text-gray-200 font-medium">{selectedPayment.client.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Client Email</span>
-                      <p className="text-gray-800 dark:text-gray-200">{selectedPayment.client.email}</p>
+              <h3 className="font-medium text-gray-900 dark:text-white mb-2">Payment Process</h3>
+              <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 pl-2">
+                <li>Select your quotations for payment on the checkout page</li>
+                <li>Complete the payment using one of our available payment methods</li>
+                <li>Upload proof of payment for verification</li>
+                <li>Wait for administrator approval of your payment</li>
+                <li>Once payment is approved, your order will be processed</li>
+              </ol>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {selectedPayment.status === "Pending" && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
-                  <div className="mb-4 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-yellow-700 dark:text-yellow-400">Payment Methods</h3>
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Awaiting Payment</span>
-                  </div>
-                  <div className="space-y-4">
-                    {/* WISE BANK */}
-                    <div 
-                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
-                        selectedBank === 'wise' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
-                      }`}
-                      onClick={() => handleBankSelection('wise')}
-                    >
-                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                        <div className="flex items-center">
-                          <input
-                            type="radio"
-                            checked={selectedBank === 'wise'}
-                            onChange={() => handleBankSelection('wise')}
-                            className="w-4 h-4 text-blue-600 border-gray-300"
-                          />
-                          <div className="ml-2 font-semibold">WISE BANK</div>
-                        </div>
-                      </div>
-                      {selectedBank === 'wise' && (
-                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
-                              <p className="font-medium">MEHDI AMADOUR</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
-                              <p className="font-medium">12345678900</p>
-                            </div>
-                          </div>
-                          <div className="mt-3">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
-                            <p className="font-medium">GB29 NWBK 6016 1331 9268 19</p>
-                          </div>
-                          <div className="mt-3">
-                            <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
-                            <p className="font-medium">TRWIGB22XXX</p>
-                          </div>
-                        </div>
-                      )}
+      {/* Payment Proof Preview Modal */}
+      {expandedProofUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+          <div className="relative max-w-4xl w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={closeProofPreview}
+                className="p-2 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-full text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
                     </div>
 
-                    {/* Other banks (collapsed for brevity) */}
-                    <div 
-                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
-                        selectedBank === 'sg' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
-                      }`}
-                      onClick={() => handleBankSelection('sg')}
-                    >
-                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                        <div className="flex items-center">
-                          <input
-                            type="radio"
-                            checked={selectedBank === 'sg'}
-                            onChange={() => handleBankSelection('sg')}
-                            className="w-4 h-4 text-blue-600 border-gray-300"
-                          />
-                          <div className="ml-2 font-semibold">SOCIETE GENERALE BANK</div>
+            {expandedProofUrl.toLowerCase().endsWith('.pdf') ? (
+              <div className="p-6 text-center">
+                <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">PDF Document</h3>
+                <a
+                  href={expandedProofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block bg-blue-500 hover:bg-blue-600 text-white rounded-md px-4 py-2 font-medium"
+                >
+                  Open PDF
+                </a>
                         </div>
-                      </div>
-                      {selectedBank === 'sg' && (
-                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
-                          {/* Bank details content */}
-                        </div>
-                      )}
-                    </div>
-
-                    <div 
-                      className={`border rounded-lg overflow-hidden cursor-pointer transition-all ${
-                        selectedBank === 'cih' ? 'border-blue-500 ring-2 ring-blue-300 shadow-md' : 'hover:border-blue-300'
-                      }`}
-                      onClick={() => handleBankSelection('cih')}
-                    >
-                      <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center">
-                        <div className="flex items-center">
-                          <input
-                            type="radio"
-                            checked={selectedBank === 'cih'}
-                            onChange={() => handleBankSelection('cih')}
-                            className="w-4 h-4 text-blue-600 border-gray-300"
-                          />
-                          <div className="ml-2 font-semibold">CIH BANK</div>
-                        </div>
-                      </div>
-                      {selectedBank === 'cih' && (
-                        <div className="p-4 border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
-                          {/* Bank details content */}
+            ) : (
+              <div className="relative w-full" style={{ height: "calc(100vh - 200px)" }}>
+                <Image
+                  src={expandedProofUrl}
+                  alt="Payment proof"
+                  fill
+                  className="object-contain"
+                />
                         </div>
                       )}
                     </div>
                   </div>
+      )}
 
-                  <div className="mt-6 text-sm text-yellow-600 dark:text-yellow-500 text-center">
-                    <p>After transferring the payment amount, please provide the transfer receipt to expedite order processing.</p>
+      {/* Add Upload Proof Modal */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Upload Payment Proof
+              </h3>
+              <button 
+                onClick={closeUploadModal}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
                   </div>
+            
+            {currentPaymentId && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Payment ID: <span className="font-medium">{currentPaymentId.slice(-6)}</span>
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Amount: <span className="font-medium">${getPaymentById(currentPaymentId)?.amount.toLocaleString()}</span>
+                </p>
                 </div>
               )}
                 
-              {selectedPayment.status === "Completed" && (
-                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-6 text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {uploadSuccess ? (
+              <div className="bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-400 p-4 rounded-lg mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
+                Payment proof uploaded successfully! Your payment status has been updated to "processing".
+              </div>
+            ) : (
+              <form onSubmit={handleUploadSubmit}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Upload Proof of Payment
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="block w-full text-sm text-gray-500 dark:text-gray-400
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-medium
+                        file:bg-blue-50 file:text-blue-700
+                        dark:file:bg-blue-900/20 dark:file:text-blue-300
+                        hover:file:bg-blue-100"
+                      accept="image/*,application/pdf"
+                    />
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Accepted formats: Images (PNG, JPG) or PDF. Maximum size: 5MB.
+                    </p>
                   </div>
-                  <p className="text-green-700 dark:text-green-400 font-semibold text-lg mb-2">Payment Completed</p>
-                  <p className="text-sm text-green-600 dark:text-green-500">This payment has been successfully processed and recorded in our system.</p>
+                </div>
+                
+                {uploadError && (
+                  <div className="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-400 p-3 rounded-lg mb-4 text-sm">
+                    {uploadError}
                 </div>
               )}
                 
-              {selectedPayment.status === "Rejected" && (
-                <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </div>
-                  <p className="text-red-700 dark:text-red-400 font-semibold text-lg mb-2">Payment Rejected</p>
-                  <p className="text-sm text-red-600 dark:text-red-500 mb-4">This payment could not be processed. Please contact our support team for assistance.</p>
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    onClick={handleContactSupport}
-                  >
-                    Contact Support
-                  </button>
-                </div>
-              )}
-            </div>
-                
-            <div className="flex justify-end gap-3 p-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex justify-end space-x-3">
               <Button
-                size="sm"
                 variant="outline"
-                className="border-gray-300"
-                onClick={closePaymentModal}
-              >
-                Close
-              </Button>
-                  
-              {selectedPayment.status !== "Pending" && (
+                  size="sm"
+                    onClick={closeUploadModal}
+                    disabled={isUploading}
+                >
+                    Cancel
+                </Button>
                 <Button
+                    type="submit"
                   size="sm"
                   className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                  onClick={() => handleDownloadInvoice(selectedPayment)}
+                    disabled={isUploading}
                 >
-                  Download Invoice
+                    {isUploading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Uploading...
+                      </>
+                    ) : "Upload Proof"}
                 </Button>
-              )}
-                  
-              {selectedPayment.status === "Pending" && (
-                <Button
-                  size="sm"
-                  className="bg-[#1E88E5] hover:bg-[#0D47A1] text-white"
-                  disabled={!selectedBank}
-                >
-                  Complete Payment
-                </Button>
+                </div>
+              </form>
               )}
             </div>
           </div>
         )}
-      </Modal>
     </div>
   );
 } 

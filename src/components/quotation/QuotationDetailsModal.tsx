@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { CloseIcon } from "@/icons";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
+import { supabase } from "@/lib/supabase";
 
 interface PriceOption {
   id: string;
@@ -45,63 +46,187 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Default price options for approved quotations if none are provided
-  const defaultPriceOptions: PriceOption[] = [
-    {
-      id: "standard",
-      price: "USD 13,000",
-      supplier: "Standard Supplier",
-      deliveryTime: "4-6 weeks",
-      description: "Standard model with basic features",
-      modelName: "Standard Model",
-      modelImage: "/images/product/product-01.jpg"
-    },
-    {
-      id: "premium",
-      price: "USD 15,000",
-      supplier: "Premium Supplier Co.",
-      deliveryTime: "3-5 weeks",
-      description: "Premium model with optimizers for better performance",
-      modelName: "Premium Model with Optimizers",
-      modelImage: "/images/product/product-02.jpg"
-    },
-    {
-      id: "premium-warranty",
-      price: "USD 16,500",
-      supplier: "Premium Supplier Co.",
-      deliveryTime: "3-5 weeks",
-      description: "Premium model with extended warranty and priority support",
-      modelName: "Premium Model with Extended Warranty",
-      modelImage: "/images/product/product-03.jpg"
-    }
-  ];
-
-  // Use provided price options or default ones for approved quotations
+  // Use provided price options or empty array if none
   const displayPriceOptions = quotation.priceOptions && quotation.priceOptions.length > 0 
     ? quotation.priceOptions 
-    : (quotation.status === "Approved" ? defaultPriceOptions : []);
+    : [];
 
-  const handleAcceptQuote = () => {
-    if (!selectedOption) return;
-    
-    // Save the selected option
-    setSavedOption(selectedOption);
-    
-    // Here you would handle accepting the quote with the selected price option
-    console.log(`Accepting quote ${quotation.id} with price option ${selectedOption}`);
-    // For now we'll just simulate acceptance
-    alert(`Quotation ${quotation.id} has been accepted with the selected price option.`);
+  // Show price options UI only if there are options or if status is Approved
+  const showPriceOptions = displayPriceOptions.length > 0 || quotation.status === "Approved";
+
+  // Improved function with better error handling
+  const saveOptionToDatabase = async (optionId: string) => {
+    try {
+      setIsSaving(true);
+      
+      // Get current user session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error("Error fetching session:", sessionError);
+        alert("Unable to verify your login session. Please try logging out and back in.");
+        return false;
+      }
+      
+      const userId = session?.user?.id;
+      
+      if (!userId) {
+        console.error("User not authenticated - no userId found in session");
+        alert("You need to be logged in to save your selection. Please log in and try again.");
+        return false;
+      }
+
+      // Check if optionId is a valid UUID
+      if (!optionId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        console.error("Invalid option ID format:", optionId);
+        alert("There was a problem with the selected option. Please try selecting a different option.");
+        return false;
+      }
+      
+      // First we need to find the actual UUID of the quotation in the database
+      // since the ID we have might be formatted differently (like QT-2024-001)
+      let quotationUuid;
+      
+      if (quotation.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        // If the ID is already a valid UUID, use it directly
+        quotationUuid = quotation.id;
+      } else {
+        // Try to find the actual UUID by quotation_id if it's a formatted ID
+        const { data: quotationData, error: quotationError } = await supabase
+          .from('quotations')
+          .select('id')
+          .eq('quotation_id', quotation.id)
+          .maybeSingle();
+          
+        if (quotationError) {
+          console.error("Error finding quotation UUID:", quotationError);
+          alert("There was a problem accessing the quotation information. Please try again later.");
+          return false;
+        }
+        
+        if (!quotationData) {
+          console.error("No matching quotation found for ID:", quotation.id);
+          alert("This quotation could not be found in the database. Please refresh the page and try again.");
+          return false;
+        }
+        
+        quotationUuid = quotationData.id;
+      }
+      
+      console.log("Debug - Attempting to save selection:", {
+        quotationId: quotation.id,
+        quotationUuid: quotationUuid,
+        optionId: optionId,
+        userId: userId
+      });
+      
+      // First check if a selection already exists
+      const { data: existingData, error: existingError } = await supabase
+        .from('user_selections')
+        .select('id')
+        .eq('quotation_id', quotationUuid)
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (existingError) {
+        console.error("Error checking existing selection:", existingError);
+        alert("There was a problem checking your previous selections. Please try again.");
+        return false;
+      }
+      
+      let result;
+      
+      // If a selection exists, update it
+      if (existingData?.id) {
+        console.log("Debug - Updating existing selection with ID:", existingData.id);
+        result = await supabase
+          .from('user_selections')
+          .update({
+            option_id: optionId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id);
+      } 
+      // Otherwise, create a new selection
+      else {
+        console.log("Debug - Creating new selection");
+        result = await supabase
+          .from('user_selections')
+          .insert({
+            quotation_id: quotationUuid,
+            option_id: optionId,
+            user_id: userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+      }
+      
+      if (result.error) {
+        const errorMessage = result.error.message || "Unknown error";
+        console.error("Error saving selection:", result.error);
+        console.error("Error details:", JSON.stringify(result.error, null, 2));
+        
+        // Handle common error cases
+        if (errorMessage.includes("foreign key constraint")) {
+          alert("The selected option or quotation no longer exists. Please refresh the page and try again.");
+        } else if (errorMessage.includes("permission denied")) {
+          alert("You don't have permission to save this selection. Please contact support.");
+        } else {
+          alert(`Error saving your selection: ${errorMessage}`);
+        }
+        
+        return false;
+      }
+      
+      console.log("Selection saved successfully:", result.data);
+      return true;
+      
+    } catch (error) {
+      console.error("Exception saving selection:", error);
+      alert("An unexpected error occurred. Please try again or contact support if the problem persists.");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSaveSelection = () => {
+  const handleAcceptQuote = async () => {
     if (!selectedOption) return;
     
-    // Save the selected option
-    setSavedOption(selectedOption);
+    // Save the selected option to database
+    const saved = await saveOptionToDatabase(selectedOption);
     
-    // Confirm to user
-    alert(`Your price option selection has been saved. You can now proceed to payment.`);
+    if (saved) {
+      // Save the selected option in local state
+      setSavedOption(selectedOption);
+      
+      // Here you would handle accepting the quote with the selected price option
+      console.log(`Accepting quote ${quotation.id} with price option ${selectedOption}`);
+      
+      // For now we'll just simulate acceptance
+      alert(`Quotation ${quotation.id} has been accepted with the selected price option.`);
+    } else {
+      alert("Failed to save your selection. Please try again.");
+    }
+  };
+
+  const handleSaveSelection = async () => {
+    if (!selectedOption) return;
+    
+    // Save the selected option to database
+    const saved = await saveOptionToDatabase(selectedOption);
+    
+    if (saved) {
+      // Save the selected option in local state
+      setSavedOption(selectedOption);
+      
+      // Confirm to user
+      alert(`Your price option selection has been saved. You can now proceed to payment.`);
+    } else {
+      alert("Failed to save your selection. Please try again.");
+    }
   };
 
   const handlePayNow = () => {
@@ -123,6 +248,110 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
   const handleImageClick = (imageSrc: string) => {
     setZoomImage(imageSrc);
     setZoomLevel(1);
+  };
+
+  // Price options section
+  const renderPriceOptionsSection = () => {
+    // If there are actual price options, display them
+    if (displayPriceOptions.length > 0) {
+      return (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+            Price Options
+          </h3>
+          <div className="space-y-6">
+            {displayPriceOptions.map((option) => (
+              <div 
+                key={option.id}
+                className={`p-4 border rounded-lg transition-all ${
+                  selectedOption === option.id
+                    ? 'border-[#1E88E5] bg-blue-50 dark:bg-blue-900/10'
+                    : 'border-gray-200 hover:border-[#1E88E5] dark:border-gray-700'
+                }`}
+              >
+                <div className="flex flex-col md:flex-row gap-4">
+                  {option.modelImage && (
+                    <div 
+                      className="w-full md:w-1/4 cursor-pointer"
+                      onClick={() => handleImageClick(option.modelImage || '')}
+                    >
+                      <div className="relative w-full h-32 rounded overflow-hidden">
+                        <Image
+                          src={option.modelImage}
+                          alt={option.modelName || 'Model Image'}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className={`w-full ${option.modelImage ? 'md:w-3/4' : ''}`}>
+                    <div className="flex flex-col md:flex-row justify-between mb-3">
+                      <div>
+                        <h4 className="font-medium text-gray-800 dark:text-white">
+                          {option.modelName || 'Price Option'}
+                        </h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Supplier: {option.supplier}
+                        </p>
+                      </div>
+                      <div className="mt-2 md:mt-0">
+                        <span className="font-bold text-lg text-[#0D47A1] dark:text-blue-400">
+                          {option.price}
+                        </span>
+                      </div>
+                    </div>
+                    {option.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                        {option.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap justify-between items-center">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Estimated Delivery: <span className="font-medium">{option.deliveryTime}</span>
+                      </div>
+                      <div className="mt-3 md:mt-0">
+                        <Button
+                          variant={selectedOption === option.id ? "primary" : "outline"}
+                          size="sm"
+                          onClick={() => setSelectedOption(option.id)}
+                          className={selectedOption === option.id 
+                            ? "bg-[#1E88E5] hover:bg-[#0D47A1]" 
+                            : "border-[#1E88E5] text-[#1E88E5] hover:bg-[#E3F2FD]"}
+                        >
+                          {selectedOption === option.id ? 'Selected' : 'Select Option'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    // For different quotation statuses with no price options
+    if (quotation.status === "Pending") {
+      return (
+        <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
+          <p className="text-yellow-700 dark:text-yellow-400 mb-2 font-medium">Waiting for price options from administrator</p>
+          <p className="text-sm text-yellow-600 dark:text-yellow-500">The administrator is currently preparing price options for this quotation. You will be notified when they are available.</p>
+        </div>
+      );
+    }
+    
+    if (quotation.status === "Rejected") {
+      return (
+        <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+          <p className="text-red-700 dark:text-red-400 mb-2 font-medium">Quotation Rejected</p>
+          <p className="text-sm text-red-600 dark:text-red-500">This quotation has been rejected. Please contact customer support for more information.</p>
+        </div>
+      );
+    }
+    
+    return null;
   };
 
   return (
@@ -216,158 +445,64 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
           </div>
         </div>
 
-        {/* Price Options for Pending or Approved Quotations */}
-        {(quotation.status === "Pending" || quotation.status === "Approved") && displayPriceOptions.length > 0 ? (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-              Price Options
-            </h3>
-
-            {/* Card-style price options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {displayPriceOptions.map((option) => (
-                <div 
-                  key={option.id}
-                  className={`border rounded-lg overflow-hidden transition-all h-full flex flex-col ${
-                    savedOption === option.id
-                      ? 'border-green-500 ring-2 ring-green-500'
-                      : selectedOption === option.id 
-                        ? 'border-[#1E88E5] ring-2 ring-[#1E88E5]' 
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {/* Selected indicator */}
-                  {savedOption === option.id && (
-                    <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  )}
-                  
-                  {/* Option image if available */}
-                  {option.modelImage && (
-                    <div 
-                      className="relative w-full h-40 cursor-pointer"
-                      onClick={() => handleImageClick(option.modelImage!)}
-                    >
-                      <Image
-                        src={option.modelImage}
-                        alt={option.modelName || "Product option"}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                  
-                  <div className="p-4 flex-1 flex flex-col">
-                    {/* Option title */}
-                    <h4 className="font-medium text-gray-800 dark:text-white mb-2">
-                      {option.modelName || `Option ${option.id}`}
-                    </h4>
-                    
-                    {/* Price */}
-                    <div className="text-xl font-bold text-[#0D47A1] dark:text-blue-400 mb-3">
-                      {option.price}
-                    </div>
-                    
-                    {/* Option details */}
-                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300 flex-1">
-                      <div className="flex items-center">
-                        <span className="font-medium mr-1">Supplier:</span> {option.supplier}
-                      </div>
-                      <div className="flex items-center">
-                        <span className="font-medium mr-1">Delivery:</span> {option.deliveryTime}
-                      </div>
-                      {option.description && (
-                        <div className="text-gray-500 dark:text-gray-400">
-                          {option.description}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Selection button - at the bottom */}
-                    <div className="mt-4 pt-2">
-                      {savedOption === option.id ? (
-                        <div className="flex flex-col gap-2">
-                          <span className="text-sm text-green-600 font-medium text-center">Option Selected</span>
-                          <button
-                            type="button"
-                            onClick={handlePayNow}
-                            className="w-full py-2 px-3 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700"
-                          >
-                            Pay Now
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedOption(option.id)}
-                          className={`w-full py-2 px-3 rounded-md text-sm font-medium ${
-                            selectedOption === option.id
-                              ? 'bg-[#1E88E5] text-white'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
-                          }`}
-                        >
-                          {selectedOption === option.id ? 'Selected' : 'Select This Option'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {/* Shipping Information */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+            Shipping Information
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Shipping Method</span>
+              <p className="text-gray-800 dark:text-gray-200">
+                {quotation.shippingMethod}
+              </p>
             </div>
+            <div>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Destination</span>
+              <p className="text-gray-800 dark:text-gray-200">
+                {quotation.destination}
+              </p>
+            </div>
+          </div>
+        </div>
 
-            {/* Action buttons */}
-            <div className="mt-6 flex justify-end gap-3">
-              {quotation.status === "Pending" ? (
+        {/* Price Options Section */}
+        {renderPriceOptionsSection()}
+
+        {/* Action buttons */}
+        <div className="mt-6 flex justify-end gap-3">
+          {quotation.status === "Pending" ? (
+            <Button
+              variant="primary"
+              disabled={!selectedOption || isSaving}
+              onClick={handleAcceptQuote}
+              className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+            >
+              {isSaving ? 'Saving...' : 'Accept Quotation'}
+            </Button>
+          ) : (
+            <>
+              {selectedOption && !savedOption && (
                 <Button
-                  variant="primary"
-                  disabled={!selectedOption}
-                  onClick={handleAcceptQuote}
-                  className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+                  variant="outline"
+                  onClick={handleSaveSelection}
+                  disabled={isSaving}
+                  className="bg-gray-200 text-gray-800 hover:bg-gray-300"
                 >
-                  Accept Quotation
+                  {isSaving ? 'Saving...' : 'Save Selection'}
                 </Button>
-              ) : (
-                <>
-                  {selectedOption && !savedOption && (
-                    <Button
-                      variant="outline"
-                      onClick={handleSaveSelection}
-                      className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-                    >
-                      Save Selection
-                    </Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    disabled={!selectedOption && !savedOption}
-                    onClick={handlePayNow}
-                    className="bg-[#1E88E5] hover:bg-[#0D47A1]"
-                  >
-                    Pay Now
-                  </Button>
-                </>
               )}
-            </div>
-          </div>
-        ) : quotation.status === "Pending" ? (
-          <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
-            <p className="text-yellow-700 dark:text-yellow-400 mb-2 font-medium">Waiting for price options from administrator</p>
-            <p className="text-sm text-yellow-600 dark:text-yellow-500">The administrator is currently preparing price options for this quotation. You will be notified when they are available.</p>
-          </div>
-        ) : quotation.status === "Waiting" ? (
-          <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
-            <p className="text-yellow-700 dark:text-yellow-400 mb-2 font-medium">Waiting for price options from supplier</p>
-            <p className="text-sm text-yellow-600 dark:text-yellow-500">The supplier is currently preparing price options for this quotation. You will be notified when they are available.</p>
-          </div>
-        ) : quotation.status === "Rejected" ? (
-          <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-            <p className="text-red-700 dark:text-red-400 mb-2 font-medium">Quotation Rejected</p>
-            <p className="text-sm text-red-600 dark:text-red-500">This quotation has been rejected. Please contact customer support for more information.</p>
-          </div>
-        ) : null}
+              <Button
+                variant="primary"
+                disabled={(!selectedOption && !savedOption) || isSaving}
+                onClick={handlePayNow}
+                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+              >
+                Pay Now
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Image Zoom Modal */}
