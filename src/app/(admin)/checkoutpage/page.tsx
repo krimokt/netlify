@@ -165,7 +165,8 @@ function CheckoutPageContent() {
             description_option3,
             image_option3
           `)
-          .eq('status', 'Approved');
+          .eq('status', 'Approved')
+          .eq('user_id', effectiveUserId);
           
         if (quotationId) {
           quotationQuery.or(`quotation_id.eq.${quotationId}`);

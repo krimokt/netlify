@@ -236,69 +236,25 @@ export default function QuotationPage() {
         if (quotationsError) {
           console.error("Error fetching quotations:", quotationsError);
           console.error("Error details:", JSON.stringify(quotationsError, null, 2));
+          setQuotationData([]);
+          setIsLoading(false);
           return;
         }
 
-        if (!quotationsData) {
-          console.error("No quotation data received");
+        if (!quotationsData || quotationsData.length === 0) {
+          console.log("No quotations found for this user");
+          setQuotationData([]);
+          setMetrics({
+            total: 0,
+            approved: 0,
+            pending: 0,
+            rejected: 0
+          });
+          setIsLoading(false);
           return;
         }
         
         console.log(`Quotations retrieved: ${quotationsData.length}`);
-        
-        // Try a public query if the regular query fails or returns no data
-        if (!quotationsData || quotationsData.length === 0) {
-          console.log("Attempting to use service role query bypass...");
-          try {
-            // Enable disable RLS setting
-            const { data: publicData, error: publicError } = await supabase
-              .from('quotations')
-              .select('id, quotation_id, product_name, quantity, created_at, status, image_url, selected_option')
-              .order('created_at', { ascending: false });
-              
-            if (publicError) {
-              console.error("Public query failed:", publicError);
-            } else if (publicData && publicData.length > 0) {
-              console.log(`Public query found ${publicData.length} quotations`);
-              
-              // Use simplified data if we got results
-              const simpleFormattedData = publicData.map(item => ({
-                id: item.id,
-                quotation_id: item.quotation_id || `QT-${item.id}`,
-                product: {
-                  name: item.product_name || "Unnamed Product",
-                  image: item.image_url || "/images/product/product-01.jpg", 
-                  category: "Uncategorized",
-                  description: undefined
-                },
-                quantity: `${item.quantity || 0} units`,
-                date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "No date",
-                status: item.status || "Pending",
-                price: undefined,
-                shippingMethod: "Unknown",
-                destination: "Unknown",
-                priceOptions: [],
-                hasImage: !!item.image_url,
-                selected_option: item.selected_option || undefined
-              }));
-              
-              setQuotationData(simpleFormattedData);
-              
-              // Set basic metrics
-              setMetrics({
-                total: publicData.length,
-                approved: publicData.filter(item => item.status === "Approved").length,
-                pending: publicData.filter(item => item.status === "Pending").length,
-                rejected: publicData.filter(item => item.status === "Rejected").length
-              });
-              
-              setIsLoading(false);
-              return; // Skip further processing
-            }
-          } catch (bypassError) {
-            console.error("Public query error:", bypassError);
-          }
-        }
         
         // Transform data to match the format expected by the component
         try {
