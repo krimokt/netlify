@@ -43,14 +43,47 @@ export default function UserInfoCard() {
 
         if (error) {
           console.error("Error fetching profile data:", error);
-          setProfileData(null); // Handle error case
+          
+          // Check if the error is because the profile doesn't exist
+          // PostgreSQL error code for 'no rows returned' is 'PGRST116'
+          if (error.code === 'PGRST116' || error.message?.includes('no rows')) {
+            console.log("No profile found, creating one for user:", user.id);
+            
+            // Extract user metadata from auth user
+            const firstName = user.user_metadata?.first_name || '';
+            const lastName = user.user_metadata?.last_name || '';
+            const email = user.email || '';
+            
+            // Create a new profile
+            const { data: newProfile, error: insertError } = await supabase
+              .from('profiles')
+              .insert([
+                { 
+                  id: user.id,
+                  first_name: firstName,
+                  last_name: lastName,
+                  full_name: `${firstName} ${lastName}`.trim(),
+                  email: email,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                }
+              ])
+              .select('first_name, last_name, email, phone, country, updated_at')
+              .single();
+            
+            if (insertError) {
+              console.error("Error creating profile:", insertError);
+              setProfileData(null);
+            } else {
+              console.log("Profile created successfully:", newProfile);
+              setProfileData(newProfile);
+            }
+          } else {
+            // Some other error occurred
+            setProfileData(null);
+          }
         } else if (data) {
           setProfileData(data);
-          // Optionally update localStorage if still needed for other components,
-          // but primary source is now state fetched from DB.
-          // if (typeof window !== 'undefined') {
-          //   localStorage.setItem('profileData', JSON.stringify(data));
-          // }
         }
       } catch (err) {
         console.error("Exception fetching profile data:", err);
