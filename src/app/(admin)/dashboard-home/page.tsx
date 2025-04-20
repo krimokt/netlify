@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  ArrowUpIcon, 
+ 
   BoxIconLine, 
   GroupIcon, 
   PaperPlaneIcon,
@@ -356,10 +356,7 @@ export default function DashboardHome() {
                   {metrics.pendingQuotations}
                 </h4>
               </div>
-              <Badge color="warning">
-                <ArrowUpIcon />
-                8.5%
-              </Badge>
+
             </div>
           </div>
 
@@ -395,10 +392,7 @@ export default function DashboardHome() {
                   {metrics.deliveredProducts}
                 </h4>
               </div>
-              <Badge color="success">
-                <ArrowUpIcon />
-                15.2%
-              </Badge>
+
             </div>
           </div>
 
@@ -416,10 +410,7 @@ export default function DashboardHome() {
                   ${metrics.totalSpend.toLocaleString()}
                 </h4>
               </div>
-              <Badge color="success">
-                <ArrowUpIcon />
-                9.7%
-              </Badge>
+
             </div>
           </div>
         </div>

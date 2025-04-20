@@ -19,102 +19,6 @@ import { useAuth } from "@/context/AuthContext";
 import CheckoutConfirmationModal from "@/components/quotation/CheckoutConfirmationModal";
 import { QuotationData, PriceOption } from "@/types/quotation";
 
-// Debug component to show authentication and data fetching status
-const SupabaseDebugger = () => {
-  const [debug, setDebug] = useState({
-    auth: "Checking...",
-    userId: null as string | null,
-    role: null as string | null,
-    quotationCount: null as number | null,
-    error: null as string | null,
-    expanded: false
-  });
-
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        // Check authentication
-        const { data: session, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
-          setDebug(prev => ({ ...prev, error: sessionError.message, auth: "Error" }));
-          return;
-        }
-
-        const userId = session?.session?.user?.id;
-        setDebug(prev => ({ 
-          ...prev, 
-          auth: userId ? "Authenticated" : "Not authenticated",
-          userId: userId || null
-        }));
-
-        // Try to get user role
-        if (userId) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', userId)
-            .single();
-
-          if (!profileError && profileData) {
-            setDebug(prev => ({ ...prev, role: profileData.role }));
-          }
-        }
-
-        // Check quotation count
-        const { count, error: countError } = await supabase
-          .from('quotations')
-          .select('*', { count: 'exact', head: true });
-
-        if (countError) {
-          setDebug(prev => ({ ...prev, error: `Count error: ${countError.message}` }));
-        } else {
-          setDebug(prev => ({ ...prev, quotationCount: count }));
-        }
-      } catch (error) {
-        setDebug(prev => ({ 
-          ...prev, 
-          error: error instanceof Error ? error.message : String(error),
-          auth: "Error" 
-        }));
-      }
-    }
-
-    checkAuth();
-  }, []);
-
-  const toggleExpand = () => setDebug(prev => ({ ...prev, expanded: !prev.expanded }));
-
-  return (
-    <div className="col-span-12 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-blue-800 dark:text-blue-300 font-medium text-sm">Supabase Connection Status</h3>
-        <button 
-          onClick={toggleExpand}
-          className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-1 rounded"
-        >
-          {debug.expanded ? "Hide Details" : "Show Details"}
-        </button>
-      </div>
-      
-      {debug.expanded && (
-        <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-          <p><span className="font-medium">Authentication:</span> {debug.auth}</p>
-          {debug.userId && <p><span className="font-medium">User ID:</span> {debug.userId}</p>}
-          {debug.role && <p><span className="font-medium">Role:</span> {debug.role}</p>}
-          {debug.quotationCount !== null && (
-            <p><span className="font-medium">Quotation Count:</span> {debug.quotationCount}</p>
-          )}
-          {debug.error && (
-            <p className="text-red-600 dark:text-red-400">
-              <span className="font-medium">Error:</span> {debug.error}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // Metrics interface
 interface QuotationMetrics {
   total: number;
@@ -375,7 +279,6 @@ export default function QuotationPage() {
 
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
-      <SupabaseDebugger />
       {/* Page Header Section */}
       <div className="col-span-12">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
