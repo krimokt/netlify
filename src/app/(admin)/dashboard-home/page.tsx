@@ -24,6 +24,18 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 
+// Cache configuration
+const CACHE_KEY = 'dashboard_data_cache';
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Define the cache structure
+interface CacheData {
+  quotationData: QuotationItem[];
+  metrics: DashboardMetrics;
+  timestamp: number;
+  userId: string;
+}
+
 // Debugging component to check Supabase connection
 const SupabaseDebug = () => {
   const [debug, setDebug] = useState({
@@ -98,14 +110,56 @@ export default function DashboardHome() {
     deliveredProducts: 0,
     totalSpend: 0
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   
   // Get current user from auth context
   const { user } = useAuth();
 
+  // Function to get cached data if valid
+  const getCachedData = (userId: string): CacheData | null => {
+    if (typeof window === 'undefined') return null; // Check for server-side rendering
+    
+    try {
+      const cachedDataString = localStorage.getItem(`${CACHE_KEY}_${userId}`);
+      if (!cachedDataString) return null;
+      
+      const cachedData = JSON.parse(cachedDataString) as CacheData;
+      const now = Date.now();
+      
+      // Check if cache is still valid (not expired) and belongs to the current user
+      if (now - cachedData.timestamp < CACHE_EXPIRY && cachedData.userId === userId) {
+        return cachedData;
+      }
+      
+      // Clear expired cache
+      localStorage.removeItem(`${CACHE_KEY}_${userId}`);
+      return null;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  };
+
+  // Function to save data to cache
+  const saveToCache = (userId: string, data: Partial<CacheData>) => {
+    if (typeof window === 'undefined') return; // Check for server-side rendering
+    
+    try {
+      localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
+        ...data,
+        userId,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+      // If caching fails, just continue without caching
+    }
+  };
+
   // Fetch real quotation data and metrics from Supabase
   useEffect(() => {
-    async function fetchData() {
+    async function loadData() {
       try {
         setIsLoading(true);
         
@@ -119,172 +173,204 @@ export default function DashboardHome() {
           return;
         }
         
-        console.log(`Fetching quotations data for user_id: ${userId}...`);
-        
-        // Fetch quotations for the table
-        const { data, error } = await supabase
-          .from('quotations')
-          .select(`
-            id,
-            quotation_id,
-            product_name,
-            quantity,
-            created_at,
-            status,
-            image_url,
-            total_price_option1,
-            total_price_option2,
-            total_price_option3
-          `)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(3);
-          
-        if (error) {
-          console.error("Error fetching quotations:", error);
-          console.error("Error details:", JSON.stringify(error, null, 2));
-          setIsLoading(false);
-          return;
-        }
-        
-        if (!data) {
-          console.warn("No quotation data returned");
-          setQuotationData([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log("Quotations data retrieved:", data.length);
-        
-        // Transform data to match the format expected by the component
-        try {
-          const formattedData = data.map(item => {
-            // Calculate price from options
-            let price;
-            const priceOptions = [
-              item.total_price_option1,
-              item.total_price_option2,
-              item.total_price_option3
-            ].filter(Boolean);
-            
-            if (priceOptions.length > 0) {
-              const average = priceOptions.reduce((sum, price) => 
-                sum + parseFloat(price), 0) / priceOptions.length;
-              price = `$${average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            }
-            
-            return {
-              id: item.quotation_id || item.id,
-              product: {
-                name: item.product_name,
-                image: item.image_url || "/images/product/product-01.jpg"
-              },
-              quantity: item.quantity,
-              date: new Date(item.created_at).toLocaleDateString(),
-              status: item.status || 'Pending',
-              hasImage: !!item.image_url,
-              price: price
-            };
-          });
-          
-          setQuotationData(formattedData);
-        } catch (formatError) {
-          console.error("Error formatting quotation data:", formatError);
-          setQuotationData([]);
-        }
-        
-        try {
-          // Fetch pending quotations count
-          console.log(`Fetching pending quotations count for user_id: ${userId}...`);
-          const { count: pendingCount, error: pendingError } = await supabase
-            .from('quotations')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'Pending')
-            .eq('user_id', userId);
-            
-          if (pendingError) {
-            console.error("Error fetching pending quotations:", pendingError);
-          } else if (pendingCount !== null) {
-            console.log("Pending quotations count:", pendingCount);
-            setMetrics(prev => ({
-              ...prev,
-              pendingQuotations: pendingCount
-            }));
-
-            // Fetch count of active shipments (shipments that are not delivered)
-            console.log(`Fetching active shipments count for user_id: ${userId}...`);
-            const { count: activeShipmentsCount, error: activeShipmentsError } = await supabase
-              .from('shipping')
-              .select('id', { count: 'exact', head: true })
-              .eq('user_id', userId)
-              .not('status', 'eq', 'Delivered');
-
-            if (activeShipmentsError) {
-              console.error("Error fetching active shipments:", activeShipmentsError);
-            } else if (activeShipmentsCount !== null) {
-              console.log("Active shipments count:", activeShipmentsCount);
-              setMetrics(prev => ({
-                ...prev,
-                activeShipments: activeShipmentsCount
-              }));
-            }
-
-            // Fetch count of delivered products
-            console.log(`Fetching delivered products count for user_id: ${userId}...`);
-            const { count: deliveredCount, error: deliveredError } = await supabase
-              .from('shipping')
-              .select('id', { count: 'exact', head: true })
-              .eq('user_id', userId)
-              .eq('status', 'Delivered');
-
-            if (deliveredError) {
-              console.error("Error fetching delivered products:", deliveredError);
-            } else if (deliveredCount !== null) {
-              console.log("Delivered products count:", deliveredCount);
-              setMetrics(prev => ({
-                ...prev,
-                deliveredProducts: deliveredCount
-              }));
-            }
-
-            // Calculate total spend from approved payments
-            console.log(`Fetching approved payments for total spend calculation for user_id: ${userId}...`);
-            const { data: approvedPayments, error: paymentsError } = await supabase
-              .from('payments')
-              .select('total_amount')
-              .eq('user_id', userId)
-              .eq('status', 'Approved');
-
-            if (paymentsError) {
-              console.error("Error fetching approved payments:", paymentsError);
-            } else if (approvedPayments) {
-              console.log("Approved payments:", approvedPayments.length);
-              const totalSpend = approvedPayments.reduce((sum, payment) => {
-                // Add the payment total_amount to the running sum
-                if (payment.total_amount) {
-                  return sum + parseFloat(payment.total_amount);
-                }
-                return sum;
-              }, 0);
-              
-              setMetrics(prev => ({
-                ...prev,
-                totalSpend: totalSpend
-              }));
-            }
+        // Try to get data from cache first if not refreshing
+        if (!isRefreshing) {
+          const cachedData = getCachedData(userId);
+          if (cachedData) {
+            console.log('Using cached dashboard data');
+            setQuotationData(cachedData.quotationData);
+            setMetrics(cachedData.metrics);
+            setIsLoading(false);
+            return;
           }
-        } catch (metricsError) {
-          console.error("Error calculating metrics:", metricsError);
         }
+        
+        // If no cache or refreshing, fetch fresh data
+        console.log(`Fetching dashboard data for user_id: ${userId}...`);
+        await fetchDashboardData(userId);
+        
       } catch (error) {
-        console.error("Exception in fetchData:", error);
-      } finally {
+        console.error("Exception in loadData:", error);
         setIsLoading(false);
       }
+      
+      // Reset refreshing flag
+      setIsRefreshing(false);
     }
     
-    fetchData();
-  }, [isModalOpen, user?.id]); // Refetch when modal closes or user changes
+    loadData();
+  }, [isModalOpen, user?.id, isRefreshing]);
+  
+  const handleRefreshData = () => {
+    setIsLoading(true);
+    setIsRefreshing(true);
+  };
+
+  async function fetchDashboardData(userId: string) {
+    try {
+      // Fetch quotations for the table
+      const { data, error } = await supabase
+        .from('quotations')
+        .select(`
+          id,
+          quotation_id,
+          product_name,
+          quantity,
+          created_at,
+          status,
+          image_url,
+          total_price_option1,
+          total_price_option2,
+          total_price_option3
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(3);
+        
+      if (error) {
+        console.error("Error fetching quotations:", error);
+        console.error("Error details:", JSON.stringify(error, null, 2));
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!data) {
+        console.warn("No quotation data returned");
+        setQuotationData([]);
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log("Quotations data retrieved:", data.length);
+      
+      // Transform data to match the format expected by the component
+      try {
+        const formattedData = data.map(item => {
+          // Calculate price from options
+          let price;
+          const priceOptions = [
+            item.total_price_option1,
+            item.total_price_option2,
+            item.total_price_option3
+          ].filter(Boolean);
+          
+          if (priceOptions.length > 0) {
+            const average = priceOptions.reduce((sum, price) => 
+              sum + parseFloat(price), 0) / priceOptions.length;
+            price = `$${average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          }
+          
+          return {
+            id: item.quotation_id || item.id,
+            product: {
+              name: item.product_name,
+              image: item.image_url || "/images/product/product-01.jpg"
+            },
+            quantity: item.quantity,
+            date: new Date(item.created_at).toLocaleDateString(),
+            status: item.status || 'Pending',
+            hasImage: !!item.image_url,
+            price: price
+          };
+        });
+        
+        setQuotationData(formattedData);
+        
+        // Create a new metrics object to track all the metrics
+        const newMetrics: DashboardMetrics = {
+          pendingQuotations: 0,
+          activeShipments: 0,
+          deliveredProducts: 0,
+          totalSpend: 0
+        };
+        
+        // Fetch pending quotations count
+        console.log(`Fetching pending quotations count for user_id: ${userId}...`);
+        const { count: pendingCount, error: pendingError } = await supabase
+          .from('quotations')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'Pending')
+          .eq('user_id', userId);
+          
+        if (pendingError) {
+          console.error("Error fetching pending quotations:", pendingError);
+        } else if (pendingCount !== null) {
+          console.log("Pending quotations count:", pendingCount);
+          newMetrics.pendingQuotations = pendingCount;
+        }
+
+        // Fetch count of active shipments (shipments that are not delivered)
+        console.log(`Fetching active shipments count for user_id: ${userId}...`);
+        const { count: activeShipmentsCount, error: activeShipmentsError } = await supabase
+          .from('shipping')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .not('status', 'eq', 'Delivered');
+
+        if (activeShipmentsError) {
+          console.error("Error fetching active shipments:", activeShipmentsError);
+        } else if (activeShipmentsCount !== null) {
+          console.log("Active shipments count:", activeShipmentsCount);
+          newMetrics.activeShipments = activeShipmentsCount;
+        }
+
+        // Fetch count of delivered products
+        console.log(`Fetching delivered products count for user_id: ${userId}...`);
+        const { count: deliveredCount, error: deliveredError } = await supabase
+          .from('shipping')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'Delivered');
+
+        if (deliveredError) {
+          console.error("Error fetching delivered products:", deliveredError);
+        } else if (deliveredCount !== null) {
+          console.log("Delivered products count:", deliveredCount);
+          newMetrics.deliveredProducts = deliveredCount;
+        }
+
+        // Calculate total spend from approved payments
+        console.log(`Fetching approved payments for total spend calculation for user_id: ${userId}...`);
+        const { data: approvedPayments, error: paymentsError } = await supabase
+          .from('payments')
+          .select('total_amount')
+          .eq('user_id', userId)
+          .eq('status', 'Approved');
+
+        if (paymentsError) {
+          console.error("Error fetching approved payments:", paymentsError);
+        } else if (approvedPayments) {
+          console.log("Approved payments:", approvedPayments.length);
+          const totalSpend = approvedPayments.reduce((sum, payment) => {
+            // Add the payment total_amount to the running sum
+            if (payment.total_amount) {
+              return sum + parseFloat(payment.total_amount);
+            }
+            return sum;
+          }, 0);
+          
+          newMetrics.totalSpend = totalSpend;
+        }
+        
+        // Update the metrics state
+        setMetrics(newMetrics);
+        
+        // Save data to cache
+        saveToCache(userId, {
+          quotationData: formattedData,
+          metrics: newMetrics
+        });
+        
+      } catch (formatError) {
+        console.error("Error formatting quotation data:", formatError);
+        setQuotationData([]);
+      }
+    } catch (error) {
+      console.error("Exception in fetchDashboardData:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
@@ -400,6 +486,27 @@ export default function DashboardHome() {
                 onClick={openModal}
               >
                 Create New Quote
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                onClick={handleRefreshData}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </>
+                )}
               </Button>
               <Button 
                 variant="outline" 
