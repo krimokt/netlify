@@ -497,27 +497,22 @@ export default function PaymentPage() {
           <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-white/90">
           Payment History
           </h1>
-        <Link href="/checkoutpage">
-          <Button variant="primary" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
-            Make New Payment
-          </Button>
-        </Link>
       </div>
 
-      {/* Bank Accounts Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+      {/* Bank Accounts Section - updated for white bg in dark mode */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div className="p-5 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-800">
             Bank Account Details
           </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-600 mt-1">
             Please use one of the following bank accounts for your payments
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
           {/* Wise Bank */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="border border-gray-200 rounded-lg p-4 bg-white">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -527,12 +522,12 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Wise Bank</h3>
+                <h3 className="text-lg font-medium text-gray-800">Wise Bank</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
                 onClick={() => navigator.clipboard.writeText("BE24 9052 0546 8538")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -541,7 +536,7 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-gray-800">
               <p><span className="font-medium">Name:</span> Amaadour Ltd</p>
               <p><span className="font-medium">IBAN:</span> BE24 9052 0546 8538</p>
               <p><span className="font-medium">Swift/BIC:</span> TRWIBEB1XXX</p>
@@ -550,7 +545,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Société Générale */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="border border-gray-200 rounded-lg p-4 bg-white">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -560,12 +555,12 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Société Générale</h3>
+                <h3 className="text-lg font-medium text-gray-800">Société Générale</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
                 onClick={() => navigator.clipboard.writeText("022 780 000359002837327 74")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -574,7 +569,7 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-gray-800">
               <p><span className="font-medium">Name:</span> AMAADOUR MEHDI</p>
               <p><span className="font-medium">Code SWIFT:</span> SGMBMAMC</p>
               <p><span className="font-medium">Agency:</span> AL QODS OULAD TALEB</p>
@@ -587,7 +582,7 @@ export default function PaymentPage() {
           </div>
 
           {/* CIH Bank */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="border border-gray-200 rounded-lg p-4 bg-white">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -597,12 +592,12 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800 dark:text-white">CIH Bank</h3>
+                <h3 className="text-lg font-medium text-gray-800">CIH Bank</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
                 onClick={() => navigator.clipboard.writeText("MA64 2307 0141 7105 5211 0312 0150")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -611,7 +606,7 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-gray-800">
               <p><span className="font-medium">Name:</span> MEHDI AMAADOUR</p>
               <p><span className="font-medium">Agency:</span> BOUSKOURA VILLE VERTE</p>
               <p><span className="font-medium">IBAN:</span> MA64 2307 0141 7105 5211 0312 0150</p>
