@@ -16,6 +16,8 @@ import QuotationFormModal from "@/components/quotation/QuotationFormModal";
 import QuotationDetailsModal from "@/components/quotation/QuotationDetailsModal";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import CheckoutConfirmationModal from "@/components/quotation/CheckoutConfirmationModal";
+import { QuotationData, PriceOption } from "@/types/quotation";
 
 // Debug component to show authentication and data fetching status
 const SupabaseDebugger = () => {
@@ -113,38 +115,6 @@ const SupabaseDebugger = () => {
   );
 };
 
-// Define a proper type for the quotation object
-interface PriceOption {
-  id: string;
-  price: string;
-  supplier: string;
-  deliveryTime: string;
-  description?: string;
-  modelName?: string;
-  modelImage?: string;
-}
-
-interface QuotationData {
-  id: string;
-  quotation_id: string;
-  product: {
-    name: string;
-    image: string;
-    category: string;
-    description?: string;
-    unitGrossWeight?: string;
-  };
-  quantity: string;
-  date: string;
-  status: string;
-  price?: string;
-  shippingMethod: string;
-  destination: string;
-  priceOptions?: PriceOption[];
-  hasImage?: boolean;
-  selected_option?: number;
-}
-
 // Metrics interface
 interface QuotationMetrics {
   total: number;
@@ -165,6 +135,8 @@ export default function QuotationPage() {
     pending: 0,
     rejected: 0
   });
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [selectedCheckoutQuotation, setSelectedCheckoutQuotation] = useState<QuotationData | null>(null);
 
   // Get the current user from auth context
   const { user } = useAuth();
@@ -382,6 +354,20 @@ export default function QuotationPage() {
     setSelectedQuotation(null);
   };
 
+  const openCheckoutModal = (quotation: QuotationData) => {
+    setSelectedCheckoutQuotation(quotation);
+    setIsCheckoutModalOpen(true);
+  };
+
+  const closeCheckoutModal = () => {
+    setSelectedCheckoutQuotation(null);
+    setIsCheckoutModalOpen(false);
+  };
+
+  const handleCheckoutConfirm = (quotation: QuotationData) => {
+    window.location.href = `/checkoutpage?quotation=${quotation.quotation_id}`;
+  };
+
   // Function to navigate to checkout page
   const goToCheckout = () => {
     window.location.href = `/checkoutpage`;
@@ -404,7 +390,7 @@ export default function QuotationPage() {
                 className="bg-green-600 hover:bg-green-700"
                 onClick={goToCheckout}
               >
-                Pay Now
+                Pay Multi Quotation
               </Button>
             )}
             <Button 
@@ -631,40 +617,43 @@ export default function QuotationPage() {
                       key={item.id}
                       className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
                     >
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4">
+                        <span className="text-gray-700 text-sm dark:text-gray-300">
                         {item.quotation_id}
+                        </span>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
+                      <TableCell className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 overflow-hidden rounded-lg relative">
-                            {item.hasImage ? (
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden">
                               <Image
-                                width={40}
-                                height={40}
                                 src={item.product.image}
                                 alt={item.product.name}
-                                className="w-full h-full object-cover"
+                              fill
+                              className="object-cover"
                               />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                                No image
                               </div>
-                            )}
+                          <div>
+                            <h6 className="font-medium text-gray-700 text-sm dark:text-gray-300">
+                              {item.product.name}
+                            </h6>
+                            <p className="text-gray-500 text-xs dark:text-gray-400">
+                              {item.product.category}
+                            </p>
                           </div>
-                          <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                            {item.product.name}
-                          </span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4">
+                        <span className="text-gray-700 text-sm dark:text-gray-300">
                         {item.quantity}
+                        </span>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4">
+                        <span className="text-gray-700 text-sm dark:text-gray-300">
                         {item.date}
+                        </span>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
+                      <TableCell className="px-5 py-4">
                         <Badge
-                          size="sm"
                           color={
                             item.status === "Approved"
                               ? "success"
@@ -676,30 +665,29 @@ export default function QuotationPage() {
                           {item.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.status === "Pending" && (!item.priceOptions || item.priceOptions.length === 0) 
-                          ? <span className="text-yellow-600 dark:text-yellow-400">Waiting for prices from supplier</span>
-                          : item.price || (item.priceOptions && item.priceOptions.length > 0 
-                              ? `${item.priceOptions.length} options available` 
-                              : "-")}
+                      <TableCell className="px-5 py-4">
+                        <span className="text-gray-700 text-sm dark:text-gray-300">
+                          {item.price || "N/A"}
+                        </span>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
-                        <div className="flex gap-2">
-                          <button 
-                            className="px-3 py-1 text-xs font-medium rounded-md bg-[#1E88E5] text-white hover:bg-[#0D47A1]"
+                      <TableCell className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => openDetailsModal(item)}
                           >
                             Details
-                          </button>
+                          </Button>
                           {item.status === "Approved" && (
-                            <button 
-                              className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700"
-                              onClick={() => {
-                                window.location.href = `/checkoutpage?quotation=${item.id}`;
-                              }}
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => openCheckoutModal(item)}
                             >
                               Pay Now
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </TableCell>
@@ -736,15 +724,22 @@ export default function QuotationPage() {
         </div>
       </div>
 
-      {/* Quotation Form Modal */}
+      {/* Modals */}
       <QuotationFormModal isOpen={isModalOpen} onClose={closeModal} />
-
-      {/* Quotation Details Modal */}
       {selectedQuotation && (
         <QuotationDetailsModal 
           isOpen={isDetailsModalOpen} 
           onClose={closeDetailsModal}
           quotation={selectedQuotation}
+          openCheckoutModal={openCheckoutModal}
+        />
+      )}
+      {selectedCheckoutQuotation && (
+        <CheckoutConfirmationModal
+          isOpen={isCheckoutModalOpen}
+          onClose={closeCheckoutModal}
+          onConfirm={() => handleCheckoutConfirm(selectedCheckoutQuotation)}
+          quotation={selectedCheckoutQuotation}
         />
       )}
     </div>

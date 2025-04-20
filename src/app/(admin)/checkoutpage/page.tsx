@@ -1,26 +1,101 @@
-"use client";
+"use client"
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
-import Button from "@/components/ui/button/Button";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-import Link from "next/link";
-import Image from "next/image";
-import { useAuth } from "@/context/AuthContext";
+import type React from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { createClient } from "@supabase/supabase-js"
+import Link from "next/link"
+import Image from "next/image"
+import { useAuth } from "@/context/AuthContext"
+import Button from "@/components/ui/button/Button"
 
-// Create supabase client outside the component to prevent infinite re-renders
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Define Database types
+type Database = {
+  public: {
+    Tables: {
+      quotations: {
+        Row: {
+          id: string
+          quotation_id: string
+          product_name: string
+          quantity: number
+          status: string
+          service_type: string
+          product_url: string
+          created_at: string
+          shipping_method: string
+          shipping_country: string
+          shipping_city: string
+          image_url: string
+          title_option1: string
+          total_price_option1: string
+          delivery_time_option1: string
+          description_option1: string
+          image_option1: string
+          title_option2: string
+          total_price_option2: string
+          delivery_time_option2: string
+          description_option2: string
+          image_option2: string
+          title_option3: string
+          total_price_option3: string
+          delivery_time_option3: string
+          description_option3: string
+          image_option3: string
+          user_id: string
+        }
+      }
+      price_options: {
+        Row: {
+          id: string
+          price: string
+          supplier: string
+          delivery_time: string
+          description: string
+          name: string
+          image: string
+          quotation_ref_id: string
+        }
+      }
+      user_selections: {
+        Row: {
+          option_id: string
+          quotation_id: string
+          user_id: string
+        }
+      }
+      payments: {
+        Row: {
+          id: string
+          proof_url: string
+        }
+      }
+    }
+  }
+}
+
+// Create a singleton pattern for the Supabase client to prevent re-initialization
+const createSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Supabase credentials are not provided")
+  }
+
+  return createClient<Database>(supabaseUrl, supabaseAnonKey)
+}
+
+// Use a singleton pattern to avoid creating multiple instances
+const supabase = createSupabaseClient()
 
 // Interface for debug info state
 interface DebugInfoData {
-  authStatus: string;
-  dataFetchStatus: string;
-  quotationsFound: number;
-  priceOptionsFound: number;
-  [key: string]: string | number | boolean | null | undefined;
+  authStatus: string
+  dataFetchStatus: string
+  quotationsFound: number
+  priceOptionsFound: number
+  [key: string]: string | number | boolean | null | undefined
 }
 
 // Simple component to show debugging info during development
@@ -29,597 +104,615 @@ const DebugInfo = ({ data, title }: { data: DebugInfoData; title?: string }) => 
     <h4 className="font-bold mb-1">{title || "Debug Info"}</h4>
     <pre>{JSON.stringify(data, null, 2)}</pre>
   </div>
-);
+)
 
 interface PriceOption {
-  id: string;
-  price: string;
-  numericPrice: number;
-  supplier: string;
-  deliveryTime: string;
-  description?: string;
-  modelName?: string;
-  modelImage?: string;
+  id: string
+  price: string
+  numericPrice: number
+  supplier: string
+  deliveryTime: string
+  description?: string
+  modelName?: string
+  modelImage?: string
 }
 
 interface QuotationData {
-  id: string;
-  uuid?: string;
+  id: string
+  uuid?: string
   product: {
-    name: string;
-    image: string;
-    category: string;
-    description?: string;
-  };
-  quantity: number;
-  status: string;
-  price?: string;
-  priceOptions?: PriceOption[];
-  selectedOption?: string;
+    name: string
+    image: string
+    category: string
+    description?: string
+  }
+  quantity: number
+  status: string
+  price?: string
+  priceOptions?: PriceOption[]
+  selectedOption?: string
 }
 
 // Component that uses searchParams (client component)
 function CheckoutPageContent() {
-  const searchParams = useSearchParams();
-  const quotationId = searchParams.get("quotation");
-  const router = useRouter();
-  const { user } = useAuth();
-  
-  const [quotations, setQuotations] = useState<QuotationData[]>([]);
-  const [selectedQuotations, setSelectedQuotations] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedBank, setSelectedBank] = useState<string | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const searchParams = useSearchParams()
+  const quotationId = searchParams.get("quotation")
+  const router = useRouter()
+  const { user } = useAuth()
+
+  const [quotations, setQuotations] = useState<QuotationData[]>([])
+  const [selectedQuotations, setSelectedQuotations] = useState<Set<string>>(new Set())
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedBank, setSelectedBank] = useState<string | null>(null)
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [debugState, setDebugState] = useState({
     authStatus: "Checking...",
     dataFetchStatus: "Not started",
     quotationsFound: 0,
-    priceOptionsFound: 0
-  });
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [currentPaymentId, setCurrentPaymentId] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
+    priceOptionsFound: 0,
+  })
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [currentPaymentId, setCurrentPaymentId] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
-    let isMounted = true;
-    
+    let isMounted = true
+
     async function fetchData() {
       try {
-        if (!isMounted) return;
-        
-        setIsLoading(true);
-        setError(null);
-        
+        if (!isMounted) return
+
+        setIsLoading(true)
+        setError(null)
+
         // Authentication check logic...
-        setDebugState(prev => ({ ...prev, authStatus: "Checking..." }));
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (!isMounted) return;
-        
+        setDebugState((prev) => ({ ...prev, authStatus: "Checking..." }))
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+        if (!isMounted) return
+
         if (sessionError) {
-          setDebugState(prev => ({ ...prev, authStatus: "Error: " + sessionError.message }));
-          setError("Authentication error. Please log in again.");
-          return;
+          setDebugState((prev) => ({ ...prev, authStatus: "Error: " + sessionError.message }))
+          setError("Authentication error. Please log in again.")
+          return
         }
-        
+
         // Get user ID from session
-        const userId = sessionData?.session?.user?.id;
-        
+        const userId = sessionData?.session?.user?.id
+
         // Development bypass
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        const bypassAuth = isDevelopment;
-        
+        const isDevelopment = process.env.NODE_ENV === "development"
+        const bypassAuth = isDevelopment
+
         if (!userId && !bypassAuth) {
-          setDebugState(prev => ({ ...prev, authStatus: "No user found" }));
-          setError("You need to be logged in to view the checkout page.");
-          return;
+          setDebugState((prev) => ({ ...prev, authStatus: "No user found" }))
+          setError("You need to be logged in to view the checkout page.")
+          return
         }
-        
+
         // Use a valid UUID format for development mode
-        const devUserId = "00000000-0000-4000-a000-000000000000"; // Valid UUID for development
-        const effectiveUserId = userId || (bypassAuth ? devUserId : null);
-        
-        setDebugState(prev => ({ 
-          ...prev, 
-          authStatus: bypassAuth 
-            ? "DEV MODE: Authentication bypassed" 
-            : "Authenticated as: " + effectiveUserId?.substring(0, 8) + "..." 
-        }));
-        
+        const devUserId = "7bd1a436-bb10-4b3f-b09d-2a52876fc4ed" // Valid UUID for development
+        const effectiveUserId = userId || (bypassAuth ? devUserId : null)
+
+        setDebugState((prev) => ({
+          ...prev,
+          authStatus: bypassAuth
+            ? "DEV MODE: Authentication bypassed"
+            : "Authenticated as: " + effectiveUserId?.substring(0, 8) + "...",
+        }))
+
         // Fetch quotations
-        setDebugState(prev => ({ ...prev, dataFetchStatus: "Fetching quotations..." }));
-        
-        const quotationQuery = supabase
-          .from('quotations')
-          .select(`
-            id, 
-            quotation_id, 
-            product_name, 
-            quantity, 
-            status, 
-            service_type, 
-            product_url, 
-            created_at, 
-            shipping_method, 
-            shipping_country, 
-            shipping_city,
-            image_url,
-            title_option1,
-            total_price_option1,
-            delivery_time_option1,
-            description_option1,
-            image_option1,
-            title_option2,
-            total_price_option2,
-            delivery_time_option2,
-            description_option2,
-            image_option2,
-            title_option3,
-            total_price_option3,
-            delivery_time_option3,
-            description_option3,
-            image_option3
-          `)
-          .eq('status', 'Approved')
-          .eq('user_id', effectiveUserId);
-          
-        if (quotationId) {
-          quotationQuery.or(`quotation_id.eq.${quotationId}`);
-        }
-          
-        const { data: quotationsData, error: quotationsError } = await quotationQuery;
-        
-        if (!isMounted) return;
-          
+        setDebugState((prev) => ({ ...prev, dataFetchStatus: "Fetching quotations..." }))
+
+        const { data: quotationsData, error: quotationsError } = await supabase
+          .from("quotations")
+          .select()
+          .eq("status", "Approved")
+          .eq("user_id", effectiveUserId)
+
+        if (!isMounted) return
+
         if (quotationsError) {
-          setDebugState(prev => ({ ...prev, dataFetchStatus: "Error: " + quotationsError.message }));
-          setError("Failed to load quotations. Please try again.");
-          return;
+          setDebugState((prev) => ({ ...prev, dataFetchStatus: "Error: " + quotationsError.message }))
+          setError("Failed to load quotations. Please try again.")
+          return
         }
-        
+
         if (!quotationsData || quotationsData.length === 0) {
-          setDebugState(prev => ({ ...prev, dataFetchStatus: "No quotations found" }));
-          setError("No approved quotations found.");
-          return;
+          setDebugState((prev) => ({ ...prev, dataFetchStatus: "No quotations found" }))
+          setError("No approved quotations found.")
+          return
         }
-        
-        setDebugState(prev => ({ 
-          ...prev, 
-          dataFetchStatus: "Found quotations", 
-          quotationsFound: quotationsData.length 
-        }));
-        
+
+        setDebugState((prev) => ({
+          ...prev,
+          dataFetchStatus: "Found quotations",
+          quotationsFound: quotationsData.length,
+        }))
+
         // Process all quotations
-        const formattedQuotations: QuotationData[] = [];
-        const initialOptions: Record<string, string> = {};
-        const initialQuantities: Record<string, number> = {};
-        const initialSelectedQuotations = new Set<string>();
-        
+        const formattedQuotations: QuotationData[] = []
+        const initialOptions: Record<string, string> = {}
+        const initialQuantities: Record<string, number> = {}
+        const initialSelectedQuotations = new Set<string>()
+
         for (const quotationData of quotationsData) {
-          // Check if there are direct price options in the quotation table first
-          const priceOptions: PriceOption[] = [];
-          
-          // Add option 1 if it exists in the quotation data
+          const priceOptions: PriceOption[] = []
+
+          // Add option 1 if it exists
           if (quotationData.title_option1) {
             priceOptions.push({
-              id: '1',
-              price: quotationData.total_price_option1 ? `$${parseFloat(quotationData.total_price_option1).toLocaleString()}` : 'N/A',
-              numericPrice: parseFloat(quotationData.total_price_option1 || '0'),
+              id: "1",
+              price: quotationData.total_price_option1
+                ? `$${parseFloat(quotationData.total_price_option1).toLocaleString()}`
+                : "N/A",
+              numericPrice: parseFloat(quotationData.total_price_option1 || "0"),
               supplier: quotationData.title_option1,
-              deliveryTime: quotationData.delivery_time_option1 || 'Standard delivery',
+              deliveryTime: quotationData.delivery_time_option1 || "Standard delivery",
               description: quotationData.description_option1,
               modelName: quotationData.title_option1,
-              modelImage: quotationData.image_option1 || "/images/product/product-01.jpg"
-            });
+              modelImage: quotationData.image_option1 || "/images/product/product-01.jpg",
+            })
           }
-          
-          // Add option 2 if it exists in the quotation data
+
+          // Add option 2 if it exists
           if (quotationData.title_option2) {
             priceOptions.push({
-              id: '2',
-              price: quotationData.total_price_option2 ? `$${parseFloat(quotationData.total_price_option2).toLocaleString()}` : 'N/A',
-              numericPrice: parseFloat(quotationData.total_price_option2 || '0'),
+              id: "2",
+              price: quotationData.total_price_option2
+                ? `$${parseFloat(quotationData.total_price_option2).toLocaleString()}`
+                : "N/A",
+              numericPrice: parseFloat(quotationData.total_price_option2 || "0"),
               supplier: quotationData.title_option2,
-              deliveryTime: quotationData.delivery_time_option2 || 'Standard delivery',
+              deliveryTime: quotationData.delivery_time_option2 || "Standard delivery",
               description: quotationData.description_option2,
               modelName: quotationData.title_option2,
-              modelImage: quotationData.image_option2 || "/images/product/product-01.jpg"
-            });
+              modelImage: quotationData.image_option2 || "/images/product/product-01.jpg",
+            })
           }
-          
-          // Add option 3 if it exists in the quotation data
+
+          // Add option 3 if it exists
           if (quotationData.title_option3) {
             priceOptions.push({
-              id: '3',
-              price: quotationData.total_price_option3 ? `$${parseFloat(quotationData.total_price_option3).toLocaleString()}` : 'N/A',
-              numericPrice: parseFloat(quotationData.total_price_option3 || '0'),
+              id: "3",
+              price: quotationData.total_price_option3
+                ? `$${parseFloat(quotationData.total_price_option3).toLocaleString()}`
+                : "N/A",
+              numericPrice: parseFloat(quotationData.total_price_option3 || "0"),
               supplier: quotationData.title_option3,
-              deliveryTime: quotationData.delivery_time_option3 || 'Standard delivery',
+              deliveryTime: quotationData.delivery_time_option3 || "Standard delivery",
               description: quotationData.description_option3,
               modelName: quotationData.title_option3,
-              modelImage: quotationData.image_option3 || "/images/product/product-01.jpg"
-            });
+              modelImage: quotationData.image_option3 || "/images/product/product-01.jpg",
+            })
           }
-          
+
           // If no price options found in the quotation data, try to fetch from price_options table
-          let formattedPriceOptions = priceOptions;
-          
-          if (priceOptions.length === 0) {
-            // Fetch price options for this quotation from the price_options table
-            const { data: priceOptionsData } = await supabase
-              .from('price_options')
-              .select('*')
-              .eq('quotation_ref_id', quotationData.id);
-              
-            if (!isMounted) return;
-            
-            // Format price options from the price_options table
-            formattedPriceOptions = (priceOptionsData || []).map(option => ({
-              id: option.id,
-              price: `$${parseFloat(option.price).toLocaleString()}`,
-              numericPrice: parseFloat(option.price),
-              supplier: option.supplier || "Unknown supplier",
-              deliveryTime: option.delivery_time || "Standard delivery",
-              description: option.description,
-              modelName: option.name,
-              modelImage: option.image || "/images/product/product-01.jpg"
-            }));
-          }
-          
+          const formattedPriceOptions = priceOptions
+
+          // Skip fetching from price_options table since it doesn't exist
+          // if (priceOptions.length === 0) {
+          //   const { data: priceOptionsData } = await supabase
+          //     .from("price_options")
+          //     .select()
+          //     .eq("quotation_ref_id", quotationData.id)
+
+          //   if (!isMounted) return
+
+          //   // Format price options from the price_options table
+          //   if (priceOptionsData) {
+          //     formattedPriceOptions = priceOptionsData.map((option) => ({
+          //       id: option.id,
+          //       price: `$${parseFloat(option.price).toLocaleString()}`,
+          //       numericPrice: parseFloat(option.price),
+          //       supplier: option.supplier,
+          //       deliveryTime: option.delivery_time,
+          //       description: option.description,
+          //       modelName: option.name,
+          //       modelImage: option.image || "/images/product/product-01.jpg",
+          //     }))
+          //   }
+          // }
+
           // Update debug state with price options count
-          setDebugState(prev => ({ 
-            ...prev, 
-            priceOptionsFound: prev.priceOptionsFound + formattedPriceOptions.length
-          }));
-          
-          // Fetch user selection for this quotation
-          const { data: userSelectionData } = effectiveUserId ? await supabase
-            .from('user_selections')
-            .select('option_id')
-            .eq('quotation_id', quotationData.id)
-            .eq('user_id', effectiveUserId)
-            .maybeSingle() : { data: null };
-          
-          if (!isMounted) return;
-          
+          setDebugState((prev) => ({
+            ...prev,
+            priceOptionsFound: prev.priceOptionsFound + formattedPriceOptions.length,
+          }))
+
+          // Skip fetching user selections since the table doesn't exist
+          // const { data: userSelectionData } = effectiveUserId
+          //   ? await supabase
+          //       .from("user_selections")
+          //       .select()
+          //       .eq("quotation_id", quotationData.id)
+          //       .eq("user_id", effectiveUserId)
+          //       .maybeSingle()
+          //   : { data: null }
+
+          if (!isMounted) return
+
           // Set default option
-          const quotationIdFormatted = quotationData.quotation_id || `QT-${quotationData.id}`;
-          
-          if (userSelectionData?.option_id && formattedPriceOptions.find(opt => opt.id === userSelectionData.option_id)) {
-            initialOptions[quotationIdFormatted] = userSelectionData.option_id;
-          } else if (formattedPriceOptions.length > 0) {
-            initialOptions[quotationIdFormatted] = formattedPriceOptions[0].id;
-          }
-          
-          // Set default quantity
-          initialQuantities[quotationIdFormatted] = 1;
-          
-          // Calculate base price
-          let basePrice = "$0.00";
+          const quotationIdFormatted = quotationData.quotation_id || `QT-${quotationData.id}`
+
+          // Always use the first price option as default since we don't have user selections
           if (formattedPriceOptions.length > 0) {
-            basePrice = formattedPriceOptions[0].price;
+            initialOptions[quotationIdFormatted] = formattedPriceOptions[0].id
           }
-          
+
+          // Set default quantity
+          initialQuantities[quotationIdFormatted] = 1
+
+          // Calculate base price
+          let basePrice = "$0.00"
+          if (formattedPriceOptions.length > 0) {
+            basePrice = formattedPriceOptions[0].price
+          }
+
           // Create formatted quotation
           formattedQuotations.push({
             id: quotationIdFormatted,
             uuid: quotationData.id,
             product: {
               name: quotationData.product_name || "Unnamed Product",
-              image: quotationData.image_url || "/images/product/product-01.jpg", // Use actual image if available
+              image: quotationData.image_url || "/images/product/product-01.jpg",
               category: quotationData.service_type || "Product",
-              description: quotationData.product_url || "High-quality product"
+              description: quotationData.product_url || "High-quality product",
             },
             quantity: 1,
             status: quotationData.status || "Approved",
             price: basePrice,
             priceOptions: formattedPriceOptions,
-            selectedOption: userSelectionData?.option_id
-          });
-          
+            selectedOption: formattedPriceOptions.length > 0 ? formattedPriceOptions[0].id : undefined
+          })
+
           // If a specific quotation was requested, select it by default
           if (quotationId && quotationIdFormatted === quotationId) {
-            initialSelectedQuotations.add(quotationIdFormatted);
+            initialSelectedQuotations.add(quotationIdFormatted)
           }
         }
-        
+
         if (isMounted) {
-          setQuotations(formattedQuotations);
-          setSelectedOptions(initialOptions);
-          setQuantities(initialQuantities);
-          
+          setQuotations(formattedQuotations)
+          setSelectedOptions(initialOptions)
+          setQuantities(initialQuantities)
+
           // Only select specific quotation if provided in query param, otherwise select none
           if (quotationId) {
-            setSelectedQuotations(initialSelectedQuotations);
+            setSelectedQuotations(initialSelectedQuotations)
           } else {
             // Initialize with empty set - no auto-selection
-            setSelectedQuotations(new Set());
+            setSelectedQuotations(new Set())
           }
         }
-        
       } catch (err) {
-        console.error("Exception fetching data:", err);
+        console.error("Exception fetching data:", err)
         if (isMounted) {
-          setError("An unexpected error occurred. Please try again later.");
-          setDebugState(prev => ({ ...prev, dataFetchStatus: "Exception: " + String(err) }));
+          setError("An unexpected error occurred. Please try again later.")
+          setDebugState((prev) => ({ ...prev, dataFetchStatus: "Exception: " + String(err) }))
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoading(false)
         }
       }
     }
-    
-    fetchData();
-    
+
+    fetchData()
+
     return () => {
-      isMounted = false;
-    };
-  }, [quotationId]);
+      isMounted = false
+    }
+  }, [quotationId])
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Check session
+      const { data: sessionData } = await supabase.auth.getSession()
+      console.log("Session check:", {
+        hasSession: !!sessionData.session,
+        sessionUser: sessionData.session?.user?.id,
+        contextUser: user?.id,
+      })
+
+      // Double check with getUser
+      const { data: userData } = await supabase.auth.getUser()
+      console.log("User check:", {
+        hasUser: !!userData.user,
+        userId: userData.user?.id,
+      })
+    }
+    checkAuth()
+  }, [supabase, user])
 
   const handleBankSelection = (bank: string) => {
-    setSelectedBank(bank);
-  };
+    setSelectedBank(bank)
+  }
 
   const toggleQuotationSelection = (quotationId: string) => {
-    setSelectedQuotations(prev => {
-      const newSelection = new Set(prev);
+    setSelectedQuotations((prev) => {
+      const newSelection = new Set(prev)
       if (newSelection.has(quotationId)) {
-        newSelection.delete(quotationId);
+        newSelection.delete(quotationId)
       } else {
-        newSelection.add(quotationId);
+        newSelection.add(quotationId)
       }
-      return newSelection;
-    });
-  };
-  
+      return newSelection
+    })
+  }
+
   const handleOptionSelect = (quotationId: string, optionId: string) => {
-    setSelectedOptions(prev => ({
+    setSelectedOptions((prev) => ({
       ...prev,
-      [quotationId]: optionId
-    }));
-  };
-  
+      [quotationId]: optionId,
+    }))
+  }
+
   const getSelectedOptionName = (quotation: QuotationData) => {
-    const optionId = selectedOptions[quotation.id] || quotation.selectedOption;
+    const optionId = selectedOptions[quotation.id] || quotation.selectedOption
     if (optionId && quotation.priceOptions) {
-      const option = quotation.priceOptions.find(opt => opt.id === optionId);
-      return option ? `Option ${option.id}` : 'Option 1';
+      const option = quotation.priceOptions.find((opt) => opt.id === optionId)
+      return option ? `Option ${option.id}` : "Option 1"
     }
-    return 'Option 1';
-  };
-  
+    return "Option 1"
+  }
+
   const getQuotationPrice = (quotation: QuotationData) => {
     // Get price based on selected option
-    const optionId = selectedOptions[quotation.id] || quotation.selectedOption;
-    let price = 0;
-    
+    const optionId = selectedOptions[quotation.id] || quotation.selectedOption
+    let price = 0
+
     if (optionId && quotation.priceOptions) {
-      const option = quotation.priceOptions.find(opt => opt.id === optionId);
+      const option = quotation.priceOptions.find((opt) => opt.id === optionId)
       if (option) {
-        price = option.numericPrice;
+        price = option.numericPrice
       }
     } else if (quotation.priceOptions && quotation.priceOptions.length > 0) {
-      price = quotation.priceOptions[0].numericPrice;
+      price = quotation.priceOptions[0].numericPrice
     }
-    
+
     // Multiply by quantity
-    const quantity = quantities[quotation.id] || 1;
-    const total = price * quantity;
-    
+    const quantity = quantities[quotation.id] || 1
+    const total = price * quantity
+
     return {
       numeric: total,
-      formatted: `$${total.toLocaleString()}`
-    };
-  };
+      formatted: `$${total.toLocaleString()}`,
+    }
+  }
 
   const getTotalAmount = () => {
-    const selectedQuotationsList = quotations.filter(q => selectedQuotations.has(q.id));
+    const selectedQuotationsList = quotations.filter((q) => selectedQuotations.has(q.id))
     const total = selectedQuotationsList.reduce((sum, quotation) => {
-      return sum + getQuotationPrice(quotation).numeric;
-    }, 0);
-    return `$${total.toLocaleString()}`;
-  };
-  
+      return sum + getQuotationPrice(quotation).numeric
+    }, 0)
+    return `$${total.toLocaleString()}`
+  }
+
   const incrementQuantity = (quotationId: string) => {
-    setQuantities(prev => ({
+    setQuantities((prev) => ({
       ...prev,
-      [quotationId]: (prev[quotationId] || 1) + 1
-    }));
-  };
-  
+      [quotationId]: (prev[quotationId] || 1) + 1,
+    }))
+  }
+
   const decrementQuantity = (quotationId: string) => {
-    setQuantities(prev => ({
+    setQuantities((prev) => ({
       ...prev,
-      [quotationId]: Math.max(1, (prev[quotationId] || 1) - 1)
-    }));
-  };
+      [quotationId]: Math.max(1, (prev[quotationId] || 1) - 1),
+    }))
+  }
 
   const handleCompletePayment = async () => {
-    if (selectedQuotations.size === 0) return;
-    
+    if (selectedQuotations.size === 0) return
+
     try {
-      const selectedQuotationsList = quotations.filter(q => selectedQuotations.has(q.id));
-      const totalAmount = selectedQuotationsList.reduce((sum, quotation) => {
-        return sum + getQuotationPrice(quotation).numeric;
-      }, 0);
+      // First verify authentication
+      const { data: { session } } = await supabase.auth.getSession()
+      const isDevelopment = process.env.NODE_ENV === "development"
       
-      // Use the user from AuthContext
-      if (!user) {
-        alert("You need to be logged in to complete payment.");
-        router.push('/signin');
-        return;
+      let effectiveUserId = session?.user?.id
+
+      // In development mode, proceed with a development user ID if no session exists
+      if (isDevelopment && !effectiveUserId) {
+        console.log("Development mode: Using development user ID")
+        effectiveUserId = session?.user?.id // Development user ID
+      } else if (!effectiveUserId) {
+        // In production, require authentication
+        console.error("No authenticated user found")
+        alert("Please sign in to complete your payment.")
+        router.push("/signin")
+        return
       }
-      
+
+      const selectedQuotationsList = quotations.filter((q) => selectedQuotations.has(q.id))
+      const totalAmount = selectedQuotationsList.reduce((sum, quotation) => {
+        return sum + getQuotationPrice(quotation).numeric
+      }, 0)
+
       // Get UUID values instead of formatted IDs
       const quotationUUIDs = selectedQuotationsList
-        .map(quotation => quotation.uuid)
-        .filter(uuid => uuid !== undefined) as string[];
-      
-      // Generate a reference number for display purposes
-      const referenceNumber = `REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${new Date().getTime().toString().substring(7)}`;
-      
-      // Create payment data
+        .map((quotation) => quotation.uuid)
+        .filter((uuid): uuid is string => uuid !== undefined)
+
+      // Generate a reference number
+      const referenceNumber = `REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${new Date().getTime().toString().substring(7)}`
+
+      // Create payment data with all required fields
       const paymentData = {
-        user_id: user.id,
+        user_id: effectiveUserId,
         total_amount: totalAmount,
-        method: selectedBank || 'Other',
-        status: 'pending',
+        method: selectedBank || "Other",
+        status: "pending",
+        reference_number: referenceNumber,
         quotation_ids: quotationUUIDs
-      };
-      
-      console.log("Attempting to save payment:", { 
-        userId: user.id,
-        quotations: quotationUUIDs.length,
-        amount: totalAmount
-      });
-      
+      }
+
+      console.log("Attempting to save payment with data:", paymentData)
+
       // Insert the payment record
       const { data: paymentResult, error: paymentError } = await supabase
-        .from('payments')
-        .insert([paymentData])
+        .from("payments")
+        .insert(paymentData)
         .select()
-        .single();
-      
+        .single()
+
       if (paymentError) {
-        console.error("Payment database error:", paymentError);
-          alert(`Payment processing encountered a database error: ${paymentError.message}`);
-        return;
-      }
-      
-      // If payment was saved successfully, create payment_quotations junction records
-      if (paymentResult?.id) {
-        // Create an array of objects for payment_quotations with required user_id
-        const paymentQuotationsData = quotationUUIDs.map(quotationId => ({
-            payment_id: paymentResult.id,
-          quotation_id: quotationId,
-          user_id: user.id
-        }));
+        console.error("Payment database error:", {
+          message: paymentError.message,
+          details: paymentError.details,
+          hint: paymentError.hint,
+          code: paymentError.code,
+          data: paymentData
+        })
         
-        // Try inserting payment_quotation records
+        let errorMessage = "Payment processing failed"
+        if (paymentError.message) {
+          errorMessage += `: ${paymentError.message}`
+        }
+        if (paymentError.details) {
+          errorMessage += ` (${paymentError.details})`
+        }
+        if (paymentError.hint) {
+          errorMessage += `\nHint: ${paymentError.hint}`
+        }
+        alert(errorMessage)
+        return
+      }
+
+      // If payment was saved successfully, create payment_quotations junction records
+      if (paymentResult) {
+        // Create payment-quotation links
+        const paymentQuotationsData = quotationUUIDs.map((quotationId) => ({
+          payment_id: paymentResult.id,
+          quotation_id: quotationId,
+          user_id: effectiveUserId
+        }))
+
         if (paymentQuotationsData.length > 0) {
           try {
             const { error: junctionError } = await supabase
-              .from('payment_quotations')
-              .insert(paymentQuotationsData);
-              
+              .from("payment_quotations")
+              .insert(paymentQuotationsData)
+
             if (junctionError) {
-              console.warn("Payment quotations junction warning:", junctionError.message);
+              console.warn("Warning: Failed to link some quotations to payment:", {
+                message: junctionError.message,
+                details: junctionError.details
+              })
             }
           } catch (error) {
-            console.warn("Error creating payment-quotation links:", error);
+            console.warn("Error creating payment-quotation links:", error)
           }
         }
-        
+
         // Set the current payment ID and open the upload modal
-        setCurrentPaymentId(paymentResult.id);
-        setIsUploadModalOpen(true);
+        setCurrentPaymentId(paymentResult.id)
+        setIsUploadModalOpen(true)
       } else {
         // Fallback if no payment ID is returned
-        alert(`Payment of ${getTotalAmount()} for ${selectedQuotations.size} quotation(s) processed successfully via ${selectedBank || "default method"}. Reference: ${referenceNumber}`);
-        router.push('/payment');
+        alert(
+          `Payment of ${getTotalAmount()} for ${selectedQuotations.size} quotation(s) processed successfully via ${selectedBank || "default method"}. Reference: ${referenceNumber}`
+        )
+        router.push("/payment")
       }
     } catch (err) {
-      console.error("Payment error:", err);
-      alert("Payment processing failed. Please try again.");
+      console.error("Payment error:", err)
+      alert("Payment processing failed. Please try again.")
     }
-  };
+  }
 
   // Close the upload modal
   const closeUploadModal = () => {
     if (!isUploading) {
-      setIsUploadModalOpen(false);
-      setCurrentPaymentId(null);
-      setUploadSuccess(false);
-      setUploadError(null);
+      setIsUploadModalOpen(false)
+      setCurrentPaymentId(null)
+      setUploadSuccess(false)
+      setUploadError(null)
       // Redirect to payment page regardless of upload status
-      router.push('/payment');
+      router.push("/payment")
     }
-  };
+  }
 
   // Handle file input change
   const handleFileChange = () => {
-    setUploadError(null);
-  };
+    setUploadError(null)
+  }
 
   // Handle the proof upload
   const handleProofUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (!currentPaymentId || !fileInputRef.current?.files?.[0]) {
-      setUploadError("Please select a file to upload.");
-      return;
+      setUploadError("Please select a file to upload.")
+      return
     }
 
-    const file = fileInputRef.current.files[0];
-    setIsUploading(true);
-    setUploadError(null);
+    const file = fileInputRef.current.files[0]
+    setIsUploading(true)
+    setUploadError(null)
 
     try {
       // Upload the file to Supabase Storage
-      const fileName = `payment_proof_${currentPaymentId}_${new Date().getTime()}.${file.name.split('.').pop()}`;
+      const fileName = `payment_proof_${currentPaymentId}_${new Date().getTime()}.${file.name.split(".").pop()}`
       const { error: uploadError } = await supabase.storage
-        .from('payment-proofs')
-        .upload(fileName, file);
+        .from("payment_proofs")
+        .upload(fileName, file)
 
       if (uploadError) {
-        throw uploadError;
+        // Check if this is an RLS policy violation
+        if (uploadError.message && uploadError.message.includes("new row violates row-level security policy")) {
+          console.error("RLS Policy Violation:", uploadError)
+          throw new Error(`Upload failed due to security policy. Please make sure you're logged in and have permission to upload files. 
+          Technical details: ${uploadError.message}`)
+        }
+        
+        throw uploadError
       }
 
       // Get the public URL
       const { data: urlData } = supabase.storage
-        .from('payment-proofs')
-        .getPublicUrl(fileName);
+        .from("payment_proofs")
+        .getPublicUrl(fileName)
 
-      const publicUrl = urlData.publicUrl;
-
-      // Update the payment record with the proof URL - using proof_url instead of payment_proof_url
+      // Update the payment record with the proof URL
       const { error: updateError } = await supabase
-        .from('payments')
-        .update({ proof_url: publicUrl })
-        .eq('id', currentPaymentId);
+        .from("payments")
+        .update({ proof_url: urlData.publicUrl, payment_proof: urlData.publicUrl, status: "processing" })
+        .eq("id", currentPaymentId)
 
       if (updateError) {
-        throw updateError;
+        throw updateError
       }
 
-      setUploadSuccess(true);
+      setUploadSuccess(true)
       setTimeout(() => {
-        setIsUploadModalOpen(false);
-        router.push(`/payment?id=${currentPaymentId}`);
-      }, 2000);
+        setIsUploadModalOpen(false)
+        router.push(`/payment?id=${currentPaymentId}`)
+      }, 2000)
     } catch (error: unknown) {
-      // Provide more detailed logging for errors
-      if (error && Object.keys(error).length === 0) {
-        console.error("Upload error: Empty error object received");
-      } else {
-        console.error("Upload error:", error);
-      }
-      
-      // Improved error message handling
-      let errorMessage = "Failed to upload payment proof.";
-      
+        console.error("Upload error:", error)
+      let errorMessage = "Failed to upload payment proof."
+
       if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        // Try to extract useful information from non-standard error objects
-        const anyError = error as Record<string, unknown>;
-        if (typeof anyError.message === 'string') errorMessage = anyError.message;
+        errorMessage = error.message
+      } else if (typeof error === "object" && error !== null) {
+        const anyError = error as Record<string, unknown>
+        if (typeof anyError.message === "string") errorMessage = anyError.message
         else if (anyError.error) {
-          errorMessage = typeof anyError.error === 'string' ? anyError.error : 'Server error';
-        }
-        else if (typeof anyError.statusText === 'string') errorMessage = anyError.statusText;
+          errorMessage = typeof anyError.error === "string" ? anyError.error : "Server error"
+        } else if (typeof anyError.statusText === "string") errorMessage = anyError.statusText
       }
-      
-      setUploadError(errorMessage);
+
+      setUploadError(errorMessage)
     } finally {
-      setIsUploading(false);
+      setIsUploading(false)
     }
-  };
+  }
 
   // Loading state
   if (isLoading) {
@@ -628,10 +721,10 @@ function CheckoutPageContent() {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-t-4 border-t-blue-500 border-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading checkout data...</p>
-          <DebugInfo data={debugState} title="Loading Status" />
+          {process.env.NODE_ENV === "development" && <DebugInfo data={debugState} title="Loading Status" />}
         </div>
       </div>
-    );
+    )
   }
 
   // Error state
@@ -641,15 +734,14 @@ function CheckoutPageContent() {
         <h2 className="text-red-700 font-semibold text-lg mb-3">Error</h2>
         <p className="text-red-600">{error}</p>
         <Button
-          variant="primary"
-          className="mt-4 bg-red-600 hover:bg-red-700"
-          onClick={() => window.location.href = '/quotation'}
+          className="mt-4 bg-red-600 hover:bg-red-700 text-white"
+          onClick={() => (window.location.href = "/quotation")}
         >
           Back to Quotations
         </Button>
-        <DebugInfo data={debugState} title="Error Debug Info" />
+        {process.env.NODE_ENV === "development" && <DebugInfo data={debugState} title="Error Debug Info" />}
       </div>
-    );
+    )
   }
 
   // No quotations
@@ -659,43 +751,43 @@ function CheckoutPageContent() {
         <h2 className="text-blue-700 font-semibold text-lg mb-3">No Quotations Found</h2>
         <p className="text-blue-600">No approved quotations are available for checkout.</p>
         <Button
-          variant="primary"
-          className="mt-4 bg-blue-600 hover:bg-blue-700"
-          onClick={() => window.location.href = '/quotation'}
+          className="mt-4 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => (window.location.href = "/quotation")}
         >
           View All Quotations
         </Button>
-        <DebugInfo data={debugState} title="Debug Info" />
+        {process.env.NODE_ENV === "development" && <DebugInfo data={debugState} title="Debug Info" />}
       </div>
-    );
+    )
   }
 
-  const selectedQuotationsList = quotations.filter(q => selectedQuotations.has(q.id));
+  const selectedQuotationsList = quotations.filter((q) => selectedQuotations.has(q.id))
 
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-[#4285F4] mb-6">Product Quotations</h1>
-      
+
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main Content - Product Grid */}
         <div className="w-full lg:w-2/3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {quotations.map(quotation => {
-              const selectedOptionId = selectedOptions[quotation.id] || quotation.selectedOption || (quotation.priceOptions?.[0]?.id || '1');
-              const quantity = quantities[quotation.id] || 1;
-              const isSelected = selectedQuotations.has(quotation.id);
-              
+            {quotations.map((quotation) => {
+              const selectedOptionId =
+                selectedOptions[quotation.id] || quotation.selectedOption || quotation.priceOptions?.[0]?.id || "1"
+              const quantity = quantities[quotation.id] || 1
+              const isSelected = selectedQuotations.has(quotation.id)
+
               return (
-                <div 
+                <div
                   key={quotation.id}
                   className={`bg-white border rounded-lg overflow-hidden shadow-sm transition-all ${
-                    isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+                    isSelected ? "border-blue-500 ring-1 ring-blue-500" : "border-gray-200"
                   }`}
                 >
                   {/* Image Section */}
                   <div className="w-full h-48 bg-gray-100 flex items-center justify-center relative">
-                    <Image 
-                      src={quotation.product.image} 
+                    <Image
+                      src={quotation.product.image || "/placeholder.svg"}
                       alt={quotation.product.name}
                       width={150}
                       height={150}
@@ -707,12 +799,12 @@ function CheckoutPageContent() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Product Info */}
                   <div className="p-4">
                     <h3 className="text-lg font-medium text-gray-900">{quotation.product.name}</h3>
                     <p className="text-sm text-gray-600 mb-3">{quotation.product.description}</p>
-                    
+
                     <div className="flex justify-between items-center mb-3">
                       <div className="text-gray-800">
                         Base Price: <span className="font-medium">{quotation.price}</span>
@@ -720,9 +812,7 @@ function CheckoutPageContent() {
                       <button
                         onClick={() => toggleQuotationSelection(quotation.id)}
                         className={`h-6 w-6 rounded-full flex items-center justify-center border ${
-                          isSelected 
-                            ? 'bg-blue-500 border-blue-500 text-white' 
-                            : 'border-gray-300 text-transparent'
+                          isSelected ? "bg-blue-500 border-blue-500 text-white" : "border-gray-300 text-transparent"
                         }`}
                       >
                         {isSelected && (
@@ -732,20 +822,18 @@ function CheckoutPageContent() {
                         )}
                       </button>
                     </div>
-                    
+
                     {/* Price Options */}
                     <div className="mb-4">
                       <div className="text-sm font-medium text-gray-700 mb-2">Price Options</div>
                       <div className="space-y-3">
                         {quotation.priceOptions?.map((option) => {
-                          const isOptionSelected = selectedOptionId === option.id;
+                          const isOptionSelected = selectedOptionId === option.id
                           return (
-                            <div 
+                            <div
                               key={option.id}
                               className={`border rounded-lg overflow-hidden transition-colors ${
-                                isOptionSelected 
-                                  ? 'border-blue-500 bg-blue-50' 
-                                  : 'border-gray-200 hover:bg-gray-50'
+                                isOptionSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
                               }`}
                             >
                               <div className="p-3">
@@ -759,23 +847,17 @@ function CheckoutPageContent() {
                                         </span>
                                       )}
                                     </h4>
-                                    <p className="text-sm text-gray-500">
-                                      Supplier: {option.supplier}
-                                    </p>
+                                    <p className="text-sm text-gray-500">Supplier: {option.supplier}</p>
                                   </div>
                                   <div className="mt-2 md:mt-0">
-                                    <span className="font-bold text-lg text-blue-600">
-                                      {option.price}
-                                    </span>
+                                    <span className="font-bold text-lg text-blue-600">{option.price}</span>
                                   </div>
                                 </div>
-                                
+
                                 {option.description && (
-                                  <p className="text-sm text-gray-600 mb-2">
-                                    {option.description}
-                                  </p>
+                                  <p className="text-sm text-gray-600 mb-2">{option.description}</p>
                                 )}
-                                
+
                                 <div className="flex flex-wrap justify-between items-center">
                                   <div className="text-sm text-gray-500">
                                     Delivery: <span className="font-medium">{option.deliveryTime}</span>
@@ -784,20 +866,20 @@ function CheckoutPageContent() {
                                     onClick={() => handleOptionSelect(quotation.id, option.id)}
                                     className={`px-3 py-1 text-sm rounded transition-colors ${
                                       isOptionSelected
-                                        ? 'bg-blue-500 text-white'
-                                        : 'border border-blue-500 text-blue-500 hover:bg-blue-50'
+                                        ? "bg-blue-500 text-white"
+                                        : "border border-blue-500 text-blue-500 hover:bg-blue-50"
                                     }`}
                                   >
-                                    {isOptionSelected ? 'Selected' : 'Select Option'}
+                                    {isOptionSelected ? "Selected" : "Select Option"}
                                   </button>
                                 </div>
                               </div>
                             </div>
-                          );
+                          )
                         })}
                       </div>
                     </div>
-                    
+
                     {/* Quantity */}
                     <div className="flex items-center mb-4">
                       <button
@@ -814,18 +896,16 @@ function CheckoutPageContent() {
                         +
                       </button>
                       <div className="ml-auto text-right">
-                        <div className="text-lg font-bold text-gray-900">
-                          {getQuotationPrice(quotation).formatted}
-                        </div>
+                        <div className="text-lg font-bold text-gray-900">{getQuotationPrice(quotation).formatted}</div>
                       </div>
                     </div>
                   </div>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
-        
+
         {/* Order Summary */}
         <div className="w-full lg:w-1/3">
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
@@ -836,14 +916,12 @@ function CheckoutPageContent() {
                 </svg>
                 <h2 className="text-lg font-semibold text-gray-800">Order Summary</h2>
               </div>
-              <div className="text-sm text-gray-500 mt-1">
-                {selectedQuotationsList.length} items selected
-              </div>
+              <div className="text-sm text-gray-500 mt-1">{selectedQuotationsList.length} items selected</div>
             </div>
-            
+
             {/* Selected Items List */}
             <div className="divide-y divide-gray-200">
-              {selectedQuotationsList.map(quotation => (
+              {selectedQuotationsList.map((quotation) => (
                 <div key={quotation.id} className="p-4">
                   <div className="flex justify-between mb-1">
                     <div className="font-medium">{quotation.product.name}</div>
@@ -855,7 +933,7 @@ function CheckoutPageContent() {
                 </div>
               ))}
             </div>
-            
+
             {/* Total */}
             <div className="p-4 bg-gray-50 border-t border-gray-200">
               <div className="flex justify-between items-center">
@@ -863,46 +941,48 @@ function CheckoutPageContent() {
                 <div className="text-xl font-bold text-blue-600">{getTotalAmount()}</div>
               </div>
             </div>
-            
+
             {/* Payment Method */}
             <div className="p-5 border-t border-gray-200">
               <h3 className="font-medium text-gray-900 mb-3">Payment Method</h3>
               <div className="space-y-3">
-                {['BCA Bank Transfer', 'Mandiri Bank Transfer', 'BNI Bank Transfer', 'BRI Bank Transfer'].map((bank) => (
-                  <div 
-                    key={bank}
-                    className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                      selectedBank === bank 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                    onClick={() => handleBankSelection(bank)}
-                  >
-                    <div className="flex items-center">
-                      <div className="mr-3">
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                          selectedBank === bank 
-                            ? 'border-blue-500' 
-                            : 'border-gray-400'
-                        }`}>
-                          {selectedBank === bank && (
-                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                          )}
+                {["BCA Bank Transfer", "Mandiri Bank Transfer", "BNI Bank Transfer", "BRI Bank Transfer"].map(
+                  (bank) => (
+                    <div
+                      key={bank}
+                      className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                        selectedBank === bank ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                      onClick={() => handleBankSelection(bank)}
+                    >
+                      <div className="flex items-center">
+                        <div className="mr-3">
+                          <div
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                              selectedBank === bank ? "border-blue-500" : "border-gray-400"
+                            }`}
+                          >
+                            {selectedBank === bank && <div className="w-3 h-3 rounded-full bg-blue-500"></div>}
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 text-blue-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"></path>
+                            <path
+                              fillRule="evenodd"
+                              d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
+                              clipRule="evenodd"
+                            ></path>
+                          </svg>
+                          <span>{bank}</span>
                         </div>
                       </div>
-                      <div className="flex items-center">
-                        <svg className="w-4 h-4 text-blue-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"></path>
-                          <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd"></path>
-                        </svg>
-                        <span>{bank}</span>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  ),
+                )}
               </div>
             </div>
-            
+
             {/* Complete Purchase Button */}
             <div className="p-5 border-t border-gray-200">
               <button
@@ -910,29 +990,29 @@ function CheckoutPageContent() {
                 disabled={selectedQuotationsList.length === 0 || !selectedBank}
                 className={`w-full py-3 rounded-lg font-medium text-white text-center ${
                   selectedQuotationsList.length > 0 && selectedBank
-                    ? 'bg-blue-500 hover:bg-blue-600'
-                    : 'bg-gray-300 cursor-not-allowed'
+                    ? "bg-blue-500 hover:bg-blue-600"
+                    : "bg-gray-300 cursor-not-allowed"
                 }`}
               >
                 Complete Purchase
               </button>
             </div>
           </div>
-          
+
           {/* Navigation Buttons */}
           <div className="mt-4">
             <Link href="/quotation">
-              <Button variant="outline" size="sm" className="w-full text-blue-500 border-blue-500 hover:bg-blue-50">
+              <Button variant="outline" className="w-full text-blue-500 border-blue-500 hover:bg-blue-50">
                 Back to Quotations
               </Button>
             </Link>
           </div>
-          
+
           {/* Debug info in development */}
-          <DebugInfo data={debugState} title="Debug Info" />
+          {process.env.NODE_ENV === "development" && <DebugInfo data={debugState} title="Debug Info" />}
         </div>
       </div>
-      
+
       {/* Payment Proof Upload Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -940,17 +1020,13 @@ function CheckoutPageContent() {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-800">Upload Payment Proof</h3>
-                <button 
-                  onClick={closeUploadModal}
-                  disabled={isUploading}
-                  className="text-gray-400 hover:text-gray-600"
-                >
+                <button onClick={closeUploadModal} disabled={isUploading} className="text-gray-400 hover:text-gray-600">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                   </svg>
                 </button>
               </div>
-              
+
               {uploadSuccess ? (
                 <div className="text-center py-6">
                   <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -959,15 +1035,18 @@ function CheckoutPageContent() {
                     </svg>
                   </div>
                   <h4 className="text-lg font-medium text-gray-800 mb-2">Payment Proof Uploaded!</h4>
-                  <p className="text-gray-600 mb-4">Thank you for your payment. You will be redirected to the payment page.</p>
+                  <p className="text-gray-600 mb-4">
+                    Thank you for your payment. You will be redirected to the payment page.
+                  </p>
                 </div>
               ) : (
                 <form onSubmit={handleProofUpload}>
                   <div className="mb-6">
                     <p className="text-gray-600 mb-4">
-                      Please upload a screenshot or photo of your payment receipt. Accepted formats: JPG, PNG, PDF (max 5MB).
+                      Please upload a screenshot or photo of your payment receipt. Accepted formats: JPG, PNG, PDF (max
+                      5MB).
                     </p>
-                    
+
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors">
                       <input
                         type="file"
@@ -976,21 +1055,23 @@ function CheckoutPageContent() {
                         className="hidden"
                         accept="image/jpeg,image/png,application/pdf"
                       />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full"
-                      >
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full">
                         <div className="flex flex-col items-center justify-center">
-                          <svg className="w-10 h-10 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                          <svg
+                            className="w-10 h-10 text-gray-400 mb-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                            ></path>
                           </svg>
-                          <div className="text-sm font-medium text-gray-900">
-                            Click to upload or drag and drop
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            JPG, PNG, or PDF (max. 5MB)
-                          </p>
+                          <div className="text-sm font-medium text-gray-900">Click to upload or drag and drop</div>
+                          <p className="text-xs text-gray-500 mt-1">JPG, PNG, or PDF (max. 5MB)</p>
                         </div>
                       </button>
                       {fileInputRef.current?.files?.[0] && (
@@ -999,14 +1080,10 @@ function CheckoutPageContent() {
                         </div>
                       )}
                     </div>
-                    
-                    {uploadError && (
-                      <div className="mt-2 text-sm text-red-600">
-                        {uploadError}
-                      </div>
-                    )}
+
+                    {uploadError && <div className="mt-2 text-sm text-red-600">{uploadError}</div>}
                   </div>
-                  
+
                   <div className="flex justify-end space-x-3">
                     <button
                       type="button"
@@ -1021,8 +1098,8 @@ function CheckoutPageContent() {
                       disabled={isUploading || !fileInputRef.current?.files?.[0]}
                       className={`px-4 py-2 rounded-md text-white ${
                         isUploading || !fileInputRef.current?.files?.[0]
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-blue-500 hover:bg-blue-600'
+                          ? "bg-gray-400 cursor-not-allowed"
+                          : "bg-blue-500 hover:bg-blue-600"
                       }`}
                     >
                       {isUploading ? (
@@ -1031,7 +1108,7 @@ function CheckoutPageContent() {
                           Uploading...
                         </>
                       ) : (
-                        'Upload Proof'
+                        "Upload Proof"
                       )}
                     </button>
                   </div>
@@ -1042,7 +1119,7 @@ function CheckoutPageContent() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 // Main component that wraps the content in Suspense
@@ -1051,5 +1128,5 @@ export default function CheckoutPage() {
     <Suspense fallback={<div className="p-8 text-center">Loading checkout page...</div>}>
       <CheckoutPageContent />
     </Suspense>
-  );
-} 
+  )
+}

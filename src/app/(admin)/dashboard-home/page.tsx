@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import Button from "@/components/ui/button/Button";
 import Image from "next/image";
-import ShippingTracking from "@/components/shipping/ShippingTracking";
+import DashboardShippingTracking from "@/components/shipping/DashboardShippingTracking";
 import QuotationFormModal from "@/components/quotation/QuotationFormModal";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -88,49 +88,15 @@ interface DashboardMetrics {
   totalSpend: number;
 }
 
-// Sample data for the recent orders requests table
-const ordersData = [
-  {
-    id: "OR-2001",
-    product: {
-      name: "Industrial Valves",
-      image: "/images/product/product-04.jpg"
-    },
-    quantity: "20 units",
-    date: "2023-12-14",
-    status: "Shipped"
-  },
-  {
-    id: "OR-2002",
-    product: {
-      name: "Electric Motors",
-      image: "/images/product/product-05.jpg"
-    },
-    quantity: "10 units",
-    date: "2023-12-17",
-    status: "Processing"
-  },
-  {
-    id: "OR-2003",
-    product: {
-      name: "Control Panels",
-      image: "/images/product/product-01.jpg"
-    },
-    quantity: "5 units",
-    date: "2023-12-19",
-    status: "Delivered"
-  }
-];
-
 export default function DashboardHome() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quotationData, setQuotationData] = useState<QuotationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     pendingQuotations: 0,
-    activeShipments: 18,
-    deliveredProducts: 182,
-    totalSpend: 234500
+    activeShipments: 0,
+    deliveredProducts: 0,
+    totalSpend: 0
   });
   const router = useRouter();
   
@@ -245,31 +211,59 @@ export default function DashboardHome() {
               pendingQuotations: pendingCount
             }));
 
-            // Calculate total spend from all quotations with status 'Completed'
-            console.log(`Fetching completed quotations for spend calculation for user_id: ${userId}...`);
-            const { data: completedQuotations, error: spendError } = await supabase
-              .from('quotations')
-              .select('total_price_option1, total_price_option2, total_price_option3')
-              .eq('status', 'Completed')
-              .eq('user_id', userId);
+            // Fetch count of active shipments (shipments that are not delivered)
+            console.log(`Fetching active shipments count for user_id: ${userId}...`);
+            const { count: activeShipmentsCount, error: activeShipmentsError } = await supabase
+              .from('shipping')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .not('status', 'eq', 'Delivered');
 
-            if (spendError) {
-              console.error("Error fetching completed quotations:", spendError);
-            } else if (completedQuotations) {
-              console.log("Completed quotations:", completedQuotations.length);
-              const totalSpend = completedQuotations.reduce((sum, quote) => {
-                const options = [
-                  quote.total_price_option1,
-                  quote.total_price_option2,
-                  quote.total_price_option3
-                ].filter(Boolean);
-                
-                // If there are price options, calculate the average
-                if (options.length > 0) {
-                  const quotePrice = options.reduce((s, p) => s + parseFloat(p), 0) / options.length;
-                  return sum + quotePrice;
+            if (activeShipmentsError) {
+              console.error("Error fetching active shipments:", activeShipmentsError);
+            } else if (activeShipmentsCount !== null) {
+              console.log("Active shipments count:", activeShipmentsCount);
+              setMetrics(prev => ({
+                ...prev,
+                activeShipments: activeShipmentsCount
+              }));
+            }
+
+            // Fetch count of delivered products
+            console.log(`Fetching delivered products count for user_id: ${userId}...`);
+            const { count: deliveredCount, error: deliveredError } = await supabase
+              .from('shipping')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .eq('status', 'Delivered');
+
+            if (deliveredError) {
+              console.error("Error fetching delivered products:", deliveredError);
+            } else if (deliveredCount !== null) {
+              console.log("Delivered products count:", deliveredCount);
+              setMetrics(prev => ({
+                ...prev,
+                deliveredProducts: deliveredCount
+              }));
+            }
+
+            // Calculate total spend from approved payments
+            console.log(`Fetching approved payments for total spend calculation for user_id: ${userId}...`);
+            const { data: approvedPayments, error: paymentsError } = await supabase
+              .from('payments')
+              .select('total_amount')
+              .eq('user_id', userId)
+              .eq('status', 'Approved');
+
+            if (paymentsError) {
+              console.error("Error fetching approved payments:", paymentsError);
+            } else if (approvedPayments) {
+              console.log("Approved payments:", approvedPayments.length);
+              const totalSpend = approvedPayments.reduce((sum, payment) => {
+                // Add the payment total_amount to the running sum
+                if (payment.total_amount) {
+                  return sum + parseFloat(payment.total_amount);
                 }
-                
                 return sum;
               }, 0);
               
@@ -297,7 +291,6 @@ export default function DashboardHome() {
   
   // Navigation functions
   const goToQuotationsPage = () => router.push('/quotation');
-  const goToOrdersPage = () => router.push('/order');
   const goToShipmentTrackingPage = () => router.push('/shipment-tracking');
   
   return (
@@ -393,7 +386,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Recent Quotations Requests Table */}
-      <div className="col-span-12 lg:col-span-6">
+      <div className="col-span-12">
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
             <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
@@ -535,133 +528,18 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Recent Orders Requests Table */}
-      <div className="col-span-12 lg:col-span-6">
+      {/* Shipment Tracking Table */}
+      <div className="col-span-12">
         <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
             <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
-              Recent Orders Requests
+              Recent Shipment Tracking
             </h3>
             <div className="flex flex-wrap items-center gap-3">
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
-                onClick={goToOrdersPage}
-              >
-                View All
-              </Button>
-            </div>
-          </div>
-
-          <div className="max-w-full overflow-x-auto">
-            <div className="min-w-full">
-              <Table>
-                {/* Table Header */}
-                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                  <TableRow>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      ID
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Product
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Quantity
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Date
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
-                    >
-                      Status
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-
-                {/* Table Body */}
-                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                  {ordersData.map((item) => (
-                    <TableRow 
-                      key={item.id}
-                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
-                    >
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.id}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 overflow-hidden rounded-lg">
-                            <Image
-                              width={40}
-                              height={40}
-                              src={item.product.image}
-                              alt={item.product.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                            {item.product.name}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.quantity}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
-                        {item.date}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-start">
-                        <Badge
-                          size="sm"
-                          color={
-                            item.status === "Delivered"
-                              ? "success"
-                              : item.status === "Processing"
-                              ? "warning"
-                              : item.status === "Shipped"
-                              ? "primary"
-                              : "error"
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Shipping Tracking Section */}
-      <div className="col-span-12">
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
-              Shipment Tracking
-            </h3>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button 
-                variant="primary" 
-                size="sm" 
-                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
                 onClick={goToShipmentTrackingPage}
               >
                 View All Shipments
@@ -669,14 +547,11 @@ export default function DashboardHome() {
             </div>
           </div>
 
-          {/* Tracking Table */}
-          <div className="px-5 pb-6">
-            <ShippingTracking />
-          </div>
+          <DashboardShippingTracking />
         </div>
       </div>
 
-      {/* Quotation Form Modal */}
+      {/* Modal for New Quotation */}
       <QuotationFormModal isOpen={isModalOpen} onClose={closeModal} />
     </div>
   );

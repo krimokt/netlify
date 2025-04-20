@@ -45,13 +45,11 @@ export default function PaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [quotationsMap, setQuotationsMap] = useState<Record<string, QuotationInfo[]>>({});
   const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [currentPaymentId, setCurrentPaymentId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [expandedProofUrl, setExpandedProofUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -301,26 +299,21 @@ export default function PaymentPage() {
     }
   };
 
-  const handleUploadProof = async (paymentId: string) => {
+  const handleUploadProof = (paymentId: string) => {
     setCurrentPaymentId(paymentId);
-    setIsUploadModalOpen(true);
     setUploadSuccess(false);
     setUploadError(null);
-  };
-
-  const closeUploadModal = () => {
-    setIsUploadModalOpen(false);
-    setCurrentPaymentId(null);
-    setUploadSuccess(false);
-    setUploadError(null);
-    // Reset file input
+    
+    // Always expand the payment row
+    setExpandedPayment(paymentId);
+    
+    // Reset file input if it exists
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
   const handleFileChange = () => {
-    // Reset states when a new file is selected
     setUploadSuccess(false);
     setUploadError(null);
   };
@@ -358,36 +351,72 @@ export default function PaymentPage() {
       // Generate a unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `payment-proof-${currentPaymentId}-${Date.now()}.${fileExt}`;
-      const filePath = `payment-proofs/${fileName}`;
       
-      // Upload to Supabase Storage with correct bucket name
-      const { error: uploadError } = await supabase.storage
-        .from('Payment Proof Documents')
-        .upload(filePath, file);
+      // Important: Don't include a path prefix, just use the filename
+      const filePath = fileName;
+      
+      console.log("Uploading file:", fileName, "to bucket: payment_proofs");
+      
+      // Upload to Supabase Storage with correct bucket ID
+      const uploadResult = await supabase.storage
+        .from('payment_proofs')
+        .upload(filePath, file, {
+          upsert: true
+        });
         
-      if (uploadError) {
-        throw uploadError;
+      if (uploadResult.error) {
+        console.error("Upload error:", uploadResult.error);
+        
+        // Check if this is an RLS policy violation
+        if (uploadResult.error.message && uploadResult.error.message.includes("new row violates row-level security policy")) {
+          throw new Error(`Upload failed due to security policy. Please make sure you're logged in and have permission to upload files. 
+          Technical details: ${uploadResult.error.message}`);
+        }
+        
+        throw new Error(`Upload failed: ${uploadResult.error.message}`);
       }
       
-      // Get public URL for the uploaded file with correct bucket name
+      console.log("File uploaded successfully");
+      
+      // Get public URL 
       const { data: urlData } = supabase.storage
-        .from('Payment Proof Documents')
+        .from('payment_proofs')
         .getPublicUrl(filePath);
         
-      const publicUrl = urlData.publicUrl;
+      if (!urlData || !urlData.publicUrl) {
+        throw new Error("Failed to generate public URL");
+      }
       
-      // Update payment record with proof URL - using correct column name
-      const { error: updateError } = await supabase
+      const publicUrl = urlData.publicUrl;
+      console.log("Generated public URL:", publicUrl);
+      
+      // Update payment record with proof URL
+      console.log("Updating payment record with ID:", currentPaymentId);
+      console.log("Setting proof_url and payment_proof to:", publicUrl);
+      
+      const { data: updateData, error: updateError } = await supabase
         .from('payments')
         .update({
           proof_url: publicUrl,
+          payment_proof: publicUrl, // Update both proof columns
           status: 'processing' // Change status from pending to processing
         })
-        .eq('id', currentPaymentId);
+        .eq('id', currentPaymentId)
+        .select();
         
       if (updateError) {
-        throw updateError;
+        console.error("Database update error:", updateError);
+        throw new Error(`Failed to update payment record: ${updateError.message}`);
       }
+      
+      if (!updateData || updateData.length === 0) {
+        console.error("No payment record was updated. Possible reasons:");
+        console.error("- Payment ID might not exist:", currentPaymentId);
+        console.error("- User might not have permission to update this record");
+        throw new Error("Failed to update payment record: No record was updated");
+      }
+      
+      console.log("Payment record updated successfully:", updateData);
       
       // Update local state for the modified payment
       setPayments(prevPayments => 
@@ -404,13 +433,20 @@ export default function PaymentPage() {
       
       setUploadSuccess(true);
       
-      // Close modal after short delay to show success message
+      // Reset state after short delay
       setTimeout(() => {
-        closeUploadModal();
+        // Reset state and file input after successful upload
+        setCurrentPaymentId(null);
+        setUploadSuccess(false);
+        setUploadError(null);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }, 2000);
       
     } catch (error: unknown) {
-      console.error("Error uploading proof:", error);
+      console.error("Error in upload process:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to upload payment proof.";
       setUploadError(errorMessage);
     } finally {
@@ -424,15 +460,6 @@ export default function PaymentPage() {
     } else {
       setExpandedPayment(paymentId);
     }
-  };
-
-  // Add a function to handle the payment proof preview
-  const openProofPreview = (url: string) => {
-    setExpandedProofUrl(url);
-  };
-
-  const closeProofPreview = () => {
-    setExpandedProofUrl(null);
   };
 
   // Loading state
@@ -505,43 +532,25 @@ export default function PaymentPage() {
                         Payment #{payment.id.slice(-6)}
                       </h3>
                       <Badge color={getStatusColor(payment.status)}>{payment.status}</Badge>
-          </div>
+                    </div>
 
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       <p>Date: {payment.date}</p>
                       <p>Payment Method: {payment.paymentMethod}</p>
-          </div>
-
-                    {/* Payment proof thumbnail - if available */}
-                    {payment.proofUrl && (
-                      <div className="mt-2">
-                        <button 
-                          onClick={() => openProofPreview(payment.proofUrl as string)}
-                          className="inline-flex items-center text-sm text-blue-500 hover:text-blue-700"
-                        >
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-                          View Payment Proof
-                          </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
 
                   <div className="flex flex-col md:items-end gap-2">
                     <div className="text-xl font-bold text-gray-900 dark:text-white">${payment.amount.toFixed(2)}</div>
 
-                    {payment.status === 'pending' && !payment.proofUrl && (
-                      <Button
-                        onClick={() => handleUploadProof(payment.id)}
-                        variant="primary"
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        Upload Proof
-                      </Button>
-                    )}
+                    <Button
+                      onClick={() => handleUploadProof(payment.id)}
+                      variant="primary"
+                      size="sm"
+                      className={payment.proofUrl ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}
+                    >
+                      {payment.proofUrl ? "Update Proof" : "Upload Proof"}
+                    </Button>
                     
                     <Button
                       onClick={() => toggleExpandPayment(payment.id)}
@@ -557,6 +566,189 @@ export default function PaymentPage() {
                 {/* Quotation details - shown when expanded */}
                 {expandedPayment === payment.id && (
                   <div className="mt-4 border-t border-gray-100 pt-4">
+                    {/* Payment Proof Upload Section */}
+                    <div className="mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Payment Proof
+                      </h4>
+                      
+                      {payment.proofUrl ? (
+                        <div className="flex flex-col md:flex-row gap-4 items-start">
+                          <div className="mt-2 md:mt-0">
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                              You&apos;ve already uploaded proof for this payment.
+                            </p>
+                            
+                            {currentPaymentId === payment.id && (
+                              <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-3 bg-gray-50 dark:bg-gray-900">
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                  Replace with a new payment proof:
+                                </p>
+                                
+                                <div className="flex flex-wrap gap-3 items-end">
+                                  <div>
+                                    <input
+                                      type="file"
+                                      accept="image/jpeg,image/png,application/pdf"
+                                      className="hidden"
+                                      ref={fileInputRef}
+                                      onChange={handleFileChange}
+                                    />
+                                    <Button
+                                      type="button" 
+                                      onClick={() => fileInputRef.current?.click()}
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                    >
+                                      Select File
+                                    </Button>
+                                  </div>
+                                  
+                                  {fileInputRef.current?.files?.[0] && (
+                                    <>
+                                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        {fileInputRef.current.files[0].name}
+                                      </span>
+                                      <Button
+                                        type="submit"
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={isUploading}
+                                        className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}
+                                      >
+                                        {isUploading ? (
+                                          <>
+                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                                            Uploading...
+                                          </>
+                                        ) : (
+                                          "Upload"
+                                        )}
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                                
+                                {uploadError && (
+                                  <div className="mt-2 text-sm text-red-600 dark:text-red-400">
+                                    {uploadError}
+                                  </div>
+                                )}
+                                
+                                {uploadSuccess && (
+                                  <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Upload successful!
+                                  </div>
+                                )}
+                              </form>
+                            )}
+                            
+                            {currentPaymentId !== payment.id && (
+                              <Button
+                                onClick={() => handleUploadProof(payment.id)} 
+                                variant="outline"
+                                size="sm"
+                                className="mt-1 border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                              >
+                                Replace Proof
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {currentPaymentId === payment.id ? (
+                            <form onSubmit={handleUploadSubmit}>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                Please upload a screenshot or photo of your payment receipt.
+                                Accepted formats: JPG, PNG, PDF (max 5MB).
+                              </p>
+                              
+                              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 mb-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,application/pdf"
+                                  className="hidden"
+                                  ref={fileInputRef}
+                                  onChange={handleFileChange}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="w-full h-full flex flex-col items-center justify-center"
+                                >
+                                  <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Click to select file or drag and drop
+                                  </span>
+                                </button>
+                              </div>
+                              
+                              {fileInputRef.current?.files?.[0] && (
+                                <div className="flex items-center justify-between mt-2 mb-3">
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    Selected: <span className="font-medium">{fileInputRef.current.files[0].name}</span>
+                                  </span>
+                                  
+                                  <Button
+                                    type="submit"
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={isUploading}
+                                    className={isUploading ? "bg-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}
+                                  >
+                                    {isUploading ? (
+                                      <>
+                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                                        Uploading...
+                                      </>
+                                    ) : (
+                                      "Upload Proof"
+                                    )}
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {uploadError && (
+                                <div className="mt-2 text-sm text-red-600 dark:text-red-400">
+                                  {uploadError}
+                                </div>
+                              )}
+                              
+                              {uploadSuccess && (
+                                <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Upload successful!
+                                </div>
+                              )}
+                            </form>
+                          ) : (
+                            <div className="flex flex-col">
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                No payment proof has been uploaded yet.
+                              </p>
+                              <Button
+                                onClick={() => handleUploadProof(payment.id)} 
+                                variant="primary"
+                                size="sm"
+                                className="w-fit mt-1 bg-green-600 hover:bg-green-700"
+                              >
+                                Upload Proof
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Quotations in this payment:
                     </h4>
@@ -582,175 +774,33 @@ export default function PaymentPage() {
                                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                   </svg>
-              </div>
+                                </div>
                               )}
-            </div>
+                            </div>
                             <div className="flex-grow">
                               <h5 className="text-sm font-medium text-gray-800 dark:text-white">
-                                    {quotation.product_name}
-                                  </h5>
+                                {quotation.product_name}
+                              </h5>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 <p>Quantity: {quotation.quantity}</p>
                                 <p>Quotation ID: {quotation.id}</p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No quotation details available
+                        No quotations found for this payment.
                       </p>
                     )}
                   </div>
                 )}
-                      </div>
-            ))}
-                      </div>
-                    </div>
-      )}
-                
-      {/* Payment Proof Upload Modal */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Upload Payment Proof</h3>
-              <button 
-                onClick={closeUploadModal}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-                  </div>
-                
-            {uploadSuccess ? (
-                <div className="text-center py-4">
-                  <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Upload Successful!</h4>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Your payment proof has been uploaded and will be reviewed shortly.
-                  </p>
               </div>
-            ) : (
-              <form onSubmit={handleUploadSubmit}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Upload Proof of Payment
-                  </label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                      Please upload a screenshot or photo of your payment receipt. Accepted formats: JPG, PNG, PDF (max 5MB).
-                    </p>
-                    
-                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <input
-                      type="file"
-                        accept="image/jpeg,image/png,application/pdf"
-                        className="hidden"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full h-full flex flex-col items-center justify-center"
-                      >
-                        <svg className="w-10 h-10 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Click to select file or drag and drop
-                        </span>
-                      </button>
-                </div>
-                    
-                    {fileInputRef.current?.files?.[0] && (
-                      <div className="mt-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          Selected: <span className="font-medium">{fileInputRef.current.files[0].name}</span>
-                        </span>
-                      </div>
-                    )}
-                
-                {uploadError && (
-                      <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {uploadError}
-                </div>
-              )}
-                  </div>
-                
-                  <div className="flex justify-end gap-3">
-              <Button
-                      onClick={closeUploadModal}
-                variant="outline"
-                      type="button"
-                    disabled={isUploading}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                    Cancel
-                </Button>
-                <Button
-                      variant="primary"
-                    type="submit"
-                      disabled={isUploading || !fileInputRef.current?.files?.[0]}
-                      className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}
-                  >
-                    {isUploading ? (
-                      <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                        Uploading...
-                      </>
-                      ) : (
-                        "Upload Proof"
-                      )}
-                </Button>
-                </div>
-              </form>
-              )}
-            </div>
+            ))}
           </div>
         </div>
       )}
-      
-      {/* Payment Proof Preview Modal */}
-      {expandedProofUrl && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={closeProofPreview}>
-          <div className="max-w-3xl w-full max-h-[80vh] bg-white dark:bg-gray-800 rounded-lg overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Payment Proof</h3>
-              <button 
-                onClick={closeProofPreview}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4 flex items-center justify-center bg-gray-100 dark:bg-gray-900 h-[70vh] overflow-auto">
-              {expandedProofUrl.toLowerCase().endsWith('.pdf') ? (
-                <iframe src={expandedProofUrl} className="w-full h-full" title="Payment Proof PDF"></iframe>
-              ) : (
-                <div className="relative w-full h-full">
-                  <Image
-                    src={expandedProofUrl}
-                    alt="Payment Proof"
-                    layout="fill"
-                    objectFit="contain"
-                  />
-                </div>
-              )}
-            </div>
-            </div>
-          </div>
-        )}
     </div>
   );
 } 

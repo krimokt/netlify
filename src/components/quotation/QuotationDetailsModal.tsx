@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Modal } from "@/components/ui/modal";
 import { CloseIcon } from "@/icons";
 import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 import { supabase } from "@/lib/supabase";
+import { QuotationData } from '@/types/quotation';
 
 interface PriceOption {
   id: string;
@@ -21,27 +22,11 @@ interface PriceOption {
 interface QuotationDetailsProps {
   isOpen: boolean;
   onClose: () => void;
-  quotation: {
-    id: string;
-    product: {
-      name: string;
-      image: string;
-      category?: string;
-      description?: string;
-      unitGrossWeight?: string;
-    };
-    quantity: string;
-    date: string;
-    status: string;
-    shippingMethod: string;
-    destination: string;
-    priceOptions?: PriceOption[];
-    price?: string;
-    selected_option?: number;
-  };
+  quotation: QuotationData;
+  openCheckoutModal: (quotation: QuotationData) => void;
 }
 
-const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClose, quotation }) => {
+const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClose, quotation, openCheckoutModal }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(
     quotation.selected_option ? String(quotation.selected_option) : null
   );
@@ -55,6 +40,35 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const actionButtonsRef = React.useRef<HTMLDivElement>(null);
+
+  // Helper function to validate and format image URLs
+  const validateImageUrl = (url: string): string => {
+    if (!url) return '/images/placeholder.jpg';
+    
+    // Check if the URL is valid
+    try {
+      // If it's an absolute URL (starts with http:// or https://)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      
+      // If it's "product original" or contains invalid characters
+      if (url === "product original" || !url.trim()) {
+        return '/images/placeholder.jpg';
+      }
+      
+      // If it's a relative path, make sure it starts with '/'
+      if (!url.startsWith('/')) {
+        return `/${url}`;
+      }
+      
+      // If all checks pass, return the url
+      return url;
+    } catch (error) {
+      console.error("Error validating image URL:", error);
+      return '/images/placeholder.jpg';
+    }
+  };
 
   // Simple refresh function to update the component
   const refreshComponent = () => {
@@ -236,8 +250,9 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
     const optionToUse = savedOption || selectedOption;
     if (!optionToUse) return;
     
-    // Redirect to checkout page
-    window.location.href = `/checkoutpage?quotation=${quotation.id}`;
+    // Open the checkout modal
+    onClose(); // Close the details modal first
+    openCheckoutModal(quotation); // Open the checkout modal
   };
 
   const handleZoomIn = () => {
@@ -315,11 +330,11 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                     {option.modelImage && (
                       <div 
                         className="w-full md:w-1/4 cursor-pointer"
-                        onClick={() => handleImageClick(option.modelImage || '')}
+                        onClick={() => handleImageClick(validateImageUrl(option.modelImage || ''))}
                       >
                         <div className="relative w-full h-32 rounded overflow-hidden">
                           <Image
-                            src={option.modelImage}
+                            src={validateImageUrl(option.modelImage)}
                             alt={option.modelName || 'Model Image'}
                             fill
                             className="object-cover"
@@ -444,10 +459,10 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <div className="w-full md:w-1/3">
               <div 
                 className="relative w-full h-56 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 cursor-pointer"
-                onClick={() => handleImageClick(quotation.product.image)}
+                onClick={() => handleImageClick(validateImageUrl(quotation.product.image))}
               >
                 <Image
-                  src={quotation.product.image}
+                  src={validateImageUrl(quotation.product.image)}
                   alt={quotation.product.name}
                   fill
                   className="object-cover"
@@ -559,57 +574,49 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
         </div>
       </div>
 
-      {/* Image Zoom Modal */}
+      {/* Zoom Image Modal */}
       {zoomImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center" onClick={() => setZoomImage(null)}>
-          <div className="relative max-w-6xl w-full p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setZoomImage(null)}>
+          <div className="absolute top-5 right-5 flex space-x-3">
             <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setZoomImage(null);
-              }}
-              className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70"
+              onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
+              className="bg-white/10 p-2 rounded-full hover:bg-white/20"
             >
-              <CloseIcon className="w-6 h-6" />
+              {/* Plus Icon */}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
             </button>
-            <div className="flex justify-center mb-4">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleZoomOut();
-                }}
-                className="mr-2 bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                </svg>
-              </button>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleZoomIn();
-                }}
-                className="bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-            </div>
-            <div className="relative h-[calc(100vh-200px)] overflow-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="relative w-full h-full" style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center' }}>
-                <div className="flex items-center justify-center h-full">
-                  <Image
-                    src={zoomImage}
-                    alt="Zoomed product"
-                    width={1200}
-                    height={800}
-                    className="max-w-full max-h-full"
-                    unoptimized
-                  />
-                </div>
-              </div>
-            </div>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
+              className="bg-white/10 p-2 rounded-full hover:bg-white/20"
+            >
+              {/* Minus Icon */}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+            <button 
+              onClick={() => setZoomImage(null)}
+              className="bg-white/10 p-2 rounded-full hover:bg-white/20"
+            >
+              <CloseIcon className="w-6 h-6 text-white" />
+            </button>
+          </div>
+          <div 
+            className="relative"
+            style={{ 
+              transform: `scale(${zoomLevel})`,
+              transition: 'transform 0.2s ease-in-out'
+            }}
+          >
+            <Image
+              src={validateImageUrl(zoomImage)}
+              alt="Zoomed image"
+              width={800}
+              height={600}
+              className="max-w-screen-lg max-h-screen-lg object-contain"
+            />
           </div>
         </div>
       )}

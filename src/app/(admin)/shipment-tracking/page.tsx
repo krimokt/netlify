@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 
 // Product fallback image
 const defaultProductImage = "/images/product/product-01.jpg";
+const imagePlaceholder = "/images/placeholder.jpg";
 
 // Define the shipment tracking data type
 interface ShipmentTrackingData {
@@ -32,6 +33,9 @@ interface ShipmentTrackingData {
   user_id: string | null;
   // Related quotation data
   quotation?: QuotationData | null;
+  receiver_name?: string;
+  receiver_phone?: string;
+  receiver_address?: string;
 }
 
 // Define quotation data interface
@@ -92,11 +96,12 @@ export default function ShipmentTrackingPage() {
         setLoading(true);
         setError(null);
         
-        // Fetch only the current user's shipments
+        // Fetch only the current user's shipments, newest first
         const { data: userShipments, error: shippingError } = await supabase
           .from('shipping')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
           
         if (shippingError) {
           console.error("Error accessing shipping table:", shippingError);
@@ -113,10 +118,25 @@ export default function ShipmentTrackingPage() {
           return;
         }
         
-        // Get all quotation IDs from the user's shipping records
-        const quotationIds = userShipments.map(item => item.quotation_id);
+        // Get all quotation IDs from the user's shipping records, filtering out null/undefined values
+        const quotationIds = userShipments
+          .map(item => item.quotation_id)
+          .filter((id): id is string => id !== null && id !== undefined);
+          
+        // If there are no valid quotation IDs, we can skip fetching quotations
+        if (quotationIds.length === 0) {
+          // Map shipping items without quotation data
+          const combinedData = userShipments.map(shippingItem => ({
+            ...shippingItem,
+            quotation: null
+          }));
+          setShipmentData(combinedData);
+          setFilteredShipmentData(combinedData);
+          setLoading(false);
+          return;
+        }
         
-        // Fetch related quotation data
+        // Fetch related quotation data using only valid IDs
         const { data: quotationData, error: quotationError } = await supabase
           .from('quotations')
           .select('id, quotation_id, product_name, image_url, shipping_country, shipping_city, shipping_method')
@@ -405,6 +425,37 @@ export default function ShipmentTrackingPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Validate and format URL
+  const validateImageUrl = (url: string): string => {
+    // If URL is already absolute, return it
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // If it's a relative path without leading slash, add it
+    if (!url.startsWith('/')) {
+      return `/${url}`;
+    }
+    
+    // Otherwise, it's already a valid relative URL
+    return url;
+  };
+  
+  // Check if URL is valid for display
+  const isValidUrl = (url: string): boolean => {
+    try {
+      // Test if URL is constructable (for absolute URLs)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        new URL(url);
+        return true;
+      }
+      // For relative URLs, just check if it has content
+      return !!url.trim();
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
       {/* Page Header Section */}
@@ -493,22 +544,88 @@ export default function ShipmentTrackingPage() {
               </div>
             </div>
 
+            {/* Receiver Information Section */}
+            {selectedShipment.receiver_name && (
+              <div className="mt-6 p-4 border border-gray-100 rounded-lg">
+                <h3 className="text-lg font-medium mb-4">Receiver Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Name</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Phone Number</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_phone}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Address</p>
+                    <p className="font-medium text-gray-900 dark:text-white whitespace-pre-line">{selectedShipment.receiver_address}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Image Gallery Section - Show if images are available */}
-            {selectedShipment.images_urls && selectedShipment.images_urls.length > 0 && (
+            {selectedShipment.images_urls && selectedShipment.images_urls.length > 0 ? (
               <div className="mt-6">
                 <h3 className="mb-3 text-lg font-medium">Shipment Images</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {selectedShipment.images_urls.map((image, index) => (
-                    <div key={index} className="relative h-32 rounded-lg overflow-hidden">
-                      <Image
-                        src={image}
-                        alt={`Shipment image ${index + 1}`}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  ))}
+                  {selectedShipment.images_urls.map((url, idx) => {
+                    // Ensure URL is valid before rendering Image component
+                    const isValid = isValidUrl(url);
+                    const imageUrl = isValid ? validateImageUrl(url) : imagePlaceholder;
+                    
+                    return (
+                      <div key={idx} className="relative h-32 rounded-lg overflow-hidden">
+                        <Image
+                          src={imageUrl}
+                          alt={`Shipment image ${idx + 1}`}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+            ) : (
+              <div className="mt-6">
+                <h3 className="mb-3 text-lg font-medium">Shipment Images</h3>
+                <div className="text-center text-gray-500 py-4">No images available</div>
+              </div>
+            )}
+
+            {/* Video Gallery Section - Show if videos are available */}
+            {selectedShipment.videos_urls && selectedShipment.videos_urls.length > 0 ? (
+              <div className="mt-6">
+                <h3 className="mb-3 text-lg font-medium">Shipment Videos</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {selectedShipment.videos_urls.map((url, idx) => {
+                    // Ensure URL is valid before rendering video component
+                    const isValid = isValidUrl(url);
+                    const videoUrl = isValid ? validateImageUrl(url) : "";
+                    
+                    if (!isValid) return null;
+                    
+                    return (
+                      <div key={idx} className="rounded-lg overflow-hidden">
+                        <video 
+                          controls
+                          className="w-full h-auto"
+                          preload="metadata"
+                        >
+                          <source src={videoUrl} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6">
+                <h3 className="mb-3 text-lg font-medium">Shipment Videos</h3>
+                <div className="text-center text-gray-500 py-4">No videos available</div>
               </div>
             )}
           </>
@@ -800,14 +917,14 @@ export default function ShipmentTrackingPage() {
                     {filteredShipmentData.map((shipment) => (
                     <TableRow
                         key={shipment.id}
-                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer"
+                      className="transition-all duration-300 hover:bg-[#E3F2FD] dark:hover:bg-gray-700/50 hover:shadow-md cursor-pointer"
                     >
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm text-gray-700 dark:text-gray-300">
                           {shipment.quotation?.quotation_id || "N/A"}
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <div className="flex items-center gap-3">
-                          <div className="relative h-10 w-10 overflow-hidden rounded-lg">
+                          <div className="relative h-10 w-10 overflow-hidden rounded-lg flex-shrink-0">
                             <Image
                                 src={shipment.quotation?.image_url || defaultProductImage}
                                 alt={shipment.quotation?.product_name || "Product"}
@@ -816,43 +933,43 @@ export default function ShipmentTrackingPage() {
                             />
                           </div>
                           <div>
-                              <div className="font-medium">{shipment.quotation?.product_name || "Product"}</div>
+                              <div className="font-medium text-gray-800 dark:text-white/90">{shipment.quotation?.product_name || "Product"}</div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <div className="flex flex-col">
-                            <span className="font-medium text-[#43a047]">{shipment.quotation?.shipping_country || "Not specified"}</span>
-                            <span className="text-xs text-gray-500">{shipment.quotation?.shipping_city || "Not specified"}</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">{shipment.quotation?.shipping_country || "Not specified"}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{shipment.quotation?.shipping_city || "Not specified"}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <div className="flex flex-col">
-                            <span className="font-medium text-[#ffb300]">{shipment.location || "Not updated"}</span>
-                            <span className="text-xs text-gray-500">{shipment.location ? "In Transit" : "Waiting for update"}</span>
+                            <span className="font-medium text-yellow-600 dark:text-yellow-400">{shipment.location || "Not updated"}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{shipment.location ? "In Transit" : "Waiting for update"}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <Badge color={getStatusBadgeColor(shipment.status)} size="sm">
                             {shipment.status || "Not Available"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <div className="flex flex-col">
-                            <span className="text-xs text-gray-500">Created: {formatDate(shipment.created_at)}</span>
-                          <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Created: {formatDate(shipment.created_at)}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
                               {shipment.status?.toLowerCase() === "delivered" 
                                 ? `Delivered: ${formatDate(shipment.delivered_at)}` 
                                 : `Est. Delivery: ${formatDate(shipment.estimated_delivery)}`}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3 text-theme-sm">
+                      <TableCell className="px-5 py-3 text-sm">
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-gray-300"
+                            className="border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
                             onClick={() => viewShipmentDetails(shipment)}
                           >
                             View Details

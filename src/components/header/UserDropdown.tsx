@@ -1,33 +1,252 @@
 "use client";
 import Image from "next/image";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { customToast } from "@/components/ui/toast";
+
+// Create a custom hook for profile data to ensure consistency
+export function useProfileData() {
+  const { user } = useAuth();
+  const [profileData, setProfileData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    fullName: ""  // Start with empty string instead of "User"
+  });
+  
+  // Update profile data from Supabase on mount
+  useEffect(() => {
+    const fetchProfileFromSupabase = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (error) {
+          console.debug("Profile fetch result:", { error });
+          
+          // If no profile exists, create one
+          if (error.code === 'PGRST116' || error.message?.includes('no rows')) {
+            try {
+              const { data: newProfile, error: insertError } = await supabase
+                .from('profiles')
+                .insert([
+                  {
+                    id: user.id,
+                    email: user.email,
+                    first_name: user.user_metadata?.first_name || '',
+                    last_name: user.user_metadata?.last_name || '',
+                    updated_at: new Date().toISOString()
+                  }
+                ])
+                .select()
+                .single();
+
+              if (insertError) {
+                console.error("Error creating profile:", insertError);
+                return;
+              }
+
+              if (newProfile) {
+                const firstName = newProfile.first_name || "";
+                const lastName = newProfile.last_name || "";
+                const email = newProfile.email || user.email || "";
+                const fullName = generateFullName(firstName, lastName);
+                
+                setProfileData({
+                  firstName,
+                  lastName,
+                  email,
+                  fullName
+                });
+
+                // Store in localStorage
+                localStorage.setItem('profileData', JSON.stringify(newProfile));
+              }
+            } catch (insertErr) {
+              console.error("Exception creating profile:", insertErr);
+            }
+          }
+          return;
+        }
+        
+        if (data) {
+          console.debug("Profile data loaded:", data);
+          const firstName = data.first_name || "";
+          const lastName = data.last_name || "";
+          const email = data.email || user.email || "";
+          const fullName = generateFullName(firstName, lastName);
+          
+          setProfileData({
+            firstName,
+            lastName,
+            email,
+            fullName
+          });
+          
+          // Store in localStorage
+          localStorage.setItem('profileData', JSON.stringify(data));
+          
+          // Show profile incomplete notification if needed
+          if (!firstName && !lastName) {
+            setTimeout(() => {
+              customToast({
+                title: "Complete Your Profile",
+                description: "Please update your profile information.",
+              });
+            }, 2000);
+          }
+        }
+      } catch (err) {
+        console.error("Exception fetching profile:", err);
+      }
+    };
+    
+    // Initial data from auth context first
+    updateFromAuth();
+    
+    // Then check localStorage
+    updateFromLocalStorage();
+    
+    // Finally try to get latest from database
+    fetchProfileFromSupabase();
+    
+    // Set up listeners
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
+    };
+  }, [user]);
+  
+  const updateFromAuth = () => {
+    if (!user) return;
+    
+    const firstName = user.user_metadata?.first_name || "";
+    const lastName = user.user_metadata?.last_name || "";
+    const email = user.email || "";
+    const fullName = generateFullName(firstName, lastName);
+    
+    setProfileData({
+      firstName,
+      lastName,
+      email,
+      fullName
+    });
+  };
+  
+  const updateFromLocalStorage = () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const storedData = localStorage.getItem('profileData');
+      if (!storedData) return;
+      
+      const data = JSON.parse(storedData);
+      if (!data) return;
+      
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const email = data.email || user?.email || "";
+      const fullName = generateFullName(firstName, lastName);
+      
+      setProfileData({
+        firstName,
+        lastName,
+        email,
+        fullName
+      });
+      
+      console.log("Profile data updated from localStorage", { firstName, lastName, fullName });
+    } catch (err) {
+      console.error("Error loading profile from localStorage", err);
+    }
+  };
+  
+  const generateFullName = (first: string, last: string) => {
+    if (first && last) return `${first} ${last}`;
+    if (first) return first;
+    if (last) return last;
+    if (user?.email) return user.email.split('@')[0]; // Use email username if available
+    return "User"; // Last fallback
+  };
+  
+  const handleStorageChange = (e: StorageEvent) => {
+    if (e.key !== 'profileData' || !e.newValue) return;
+    
+    try {
+      const data = JSON.parse(e.newValue);
+      if (!data) return;
+      
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const email = data.email || profileData.email;
+      const fullName = generateFullName(firstName, lastName);
+      
+      setProfileData({
+        firstName,
+        lastName,
+        email,
+        fullName
+      });
+      
+      console.log("Profile updated from storage event", { firstName, lastName, fullName });
+    } catch (err) {
+      console.error("Error handling storage event", err);
+    }
+  };
+  
+  const handleProfileUpdate = (e: CustomEvent) => {
+    try {
+      const data = e.detail;
+      if (!data) return;
+      
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const email = data.email || profileData.email;
+      const fullName = generateFullName(firstName, lastName);
+      
+      setProfileData({
+        firstName,
+        lastName,
+        email,
+        fullName
+      });
+      
+      console.log("Profile updated from custom event", { firstName, lastName, fullName });
+    } catch (err) {
+      console.error("Error handling custom event", err);
+    }
+  };
+  
+  return profileData;
+}
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
-
-  // Get user's display name
-  const firstName = user?.user_metadata?.first_name || "";
-  const lastName = user?.user_metadata?.last_name || "";
-  const userName = firstName ? `${firstName} ${lastName}`.trim() : "User";
+  const userData = useProfileData();
   
-  // Get user's email
-  const userEmail = user?.email || "user@example.com";
-
   // Get initials for the profile circle
   const getInitials = () => {
-    const firstInitial = firstName.charAt(0).toUpperCase();
-    const lastInitial = lastName.charAt(0).toUpperCase();
+    const firstInitial = userData.firstName.charAt(0).toUpperCase();
+    const lastInitial = userData.lastName.charAt(0).toUpperCase();
     
     if (firstInitial && lastInitial) {
       return `${firstInitial}${lastInitial}`;
     } else if (firstInitial) {
       return firstInitial;
-    } else if (userEmail) {
-      return userEmail.charAt(0).toUpperCase();
+    } else if (userData.email) {
+      return userData.email.charAt(0).toUpperCase();
     } else {
       return "U";
     }
@@ -57,7 +276,7 @@ export default function UserDropdown() {
     ];
     
     // Simple hash function to generate a consistent color for the same user
-    const hash = (userName.length + userEmail.length) % colors.length;
+    const hash = (userData.fullName.length + userData.email.length) % colors.length;
     return colors[hash];
   };
 
@@ -73,7 +292,7 @@ export default function UserDropdown() {
               width={44}
               height={44}
               src={user.user_metadata.avatar_url}
-              alt={userName}
+              alt={userData.fullName}
               className="object-cover w-full h-full"
             />
           ) : (
@@ -83,7 +302,7 @@ export default function UserDropdown() {
           )}
         </span>
 
-        <span className="block mr-1 font-medium text-theme-sm">{userName.split(' ')[0]}</span>
+        <span className="block mr-1 font-medium text-theme-sm">{userData.fullName}</span>
 
         <svg
           className={`stroke-gray-500 dark:stroke-gray-400 transition-transform duration-200 ${
@@ -112,11 +331,17 @@ export default function UserDropdown() {
       >
         <div>
           <span className="block font-medium text-gray-700 text-theme-sm dark:text-gray-400">
-            {userName}
+            {userData.fullName}
           </span>
           <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">
-            {userEmail}
+            {userData.email}
           </span>
+          
+          {(!userData.firstName && !userData.lastName) && (
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">
+              Please complete your profile
+            </div>
+          )}
         </div>
 
         <ul className="flex flex-col gap-1 pt-4 pb-3 border-b border-gray-200 dark:border-gray-800">
