@@ -482,7 +482,7 @@ export default function PaymentPage() {
         <p className="text-red-600">{error}</p>
         <Button
           variant="primary"
-          className="mt-4 bg-red-600 hover:bg-red-700"
+          className="mt-4 bg-[#1E88E5] hover:bg-[#0D47A1]"
           onClick={() => router.push('/dashboard-home')}
         >
           Back to Dashboard
@@ -504,12 +504,133 @@ export default function PaymentPage() {
         </Link>
       </div>
 
+      {/* Bank Accounts Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+            Bank Account Details
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Please use one of the following bank accounts for your payments
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
+          {/* Wise Bank */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center">
+                <Image 
+                  src="/images/banks/wise.jpeg" 
+                  alt="Wise Bank" 
+                  width={60} 
+                  height={60} 
+                  className="mr-3"
+                />
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Wise Bank</h3>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => navigator.clipboard.writeText("BE24 9052 0546 8538")}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Name:</span> Amaadour Ltd</p>
+              <p><span className="font-medium">IBAN:</span> BE24 9052 0546 8538</p>
+              <p><span className="font-medium">Swift/BIC:</span> TRWIBEB1XXX</p>
+              <p><span className="font-medium">Address:</span> Wise, Rue du Trône 100, 3rd floor, Brussels, 1050, Belgium</p>
+            </div>
+          </div>
+
+          {/* Société Générale */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center">
+                <Image 
+                  src="/images/banks/societe.jpeg" 
+                  alt="Société Générale" 
+                  width={60} 
+                  height={60} 
+                  className="mr-3"
+                />
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Société Générale</h3>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => navigator.clipboard.writeText("022 780 000359002837327 74")}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Name:</span> AMAADOUR MEHDI</p>
+              <p><span className="font-medium">Code SWIFT:</span> SGMBMAMC</p>
+              <p><span className="font-medium">Agency:</span> AL QODS OULAD TALEB</p>
+              <p><span className="font-medium">Bank Code:</span> 022</p>
+              <p><span className="font-medium">Agency Code:</span> 780</p>
+              <p><span className="font-medium">Account Number:</span> 000359002837327</p>
+              <p><span className="font-medium">RIB Key:</span> 74</p>
+              <p><span className="font-medium">Currency:</span> MAD</p>
+            </div>
+          </div>
+
+          {/* CIH Bank */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center">
+                <Image 
+                  src="/images/banks/cih.jpeg" 
+                  alt="CIH Bank" 
+                  width={60} 
+                  height={60} 
+                  className="mr-3"
+                />
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">CIH Bank</h3>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => navigator.clipboard.writeText("MA64 2307 0141 7105 5211 0312 0150")}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Name:</span> MEHDI AMAADOUR</p>
+              <p><span className="font-medium">Agency:</span> BOUSKOURA VILLE VERTE</p>
+              <p><span className="font-medium">IBAN:</span> MA64 2307 0141 7105 5211 0312 0150</p>
+              <p><span className="font-medium">BIC/SWIFT:</span> CIHAMAMC</p>
+              <p><span className="font-medium">Bank Code:</span> 230</p>
+              <p><span className="font-medium">City Code:</span> 791</p>
+              <p><span className="font-medium">Account Number:</span> 4171063211031201</p>
+              <p><span className="font-medium">RIB Key:</span> 39</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {payments.length === 0 ? (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h2 className="text-blue-700 font-semibold text-lg mb-3">No Payments Found</h2>
           <p className="text-blue-600 mb-4">You haven&apos;t made any payments yet.</p>
           <Link href="/quotation">
-            <Button variant="primary" className="bg-blue-600 hover:bg-blue-700">
+            <Button variant="primary" className="bg-[#1E88E5] hover:bg-[#0D47A1]">
               View Quotations
             </Button>
           </Link>
@@ -547,7 +668,7 @@ export default function PaymentPage() {
                       onClick={() => handleUploadProof(payment.id)}
                       variant="primary"
                       size="sm"
-                      className={payment.proofUrl ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}
+                      className={payment.proofUrl ? "bg-[#1E88E5] hover:bg-[#0D47A1]" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
                     >
                       {payment.proofUrl ? "Update Proof" : "Upload Proof"}
                     </Button>
@@ -556,7 +677,7 @@ export default function PaymentPage() {
                       onClick={() => toggleExpandPayment(payment.id)}
                       variant="outline"
                       size="sm"
-                      className="text-gray-500 border-gray-300"
+                      className="text-[#1E88E5] border-[#1E88E5] hover:bg-blue-50 dark:text-blue-400 dark:border-blue-400"
                     >
                       {expandedPayment === payment.id ? 'Hide Details' : 'View Details'}
                     </Button>
@@ -615,7 +736,7 @@ export default function PaymentPage() {
                                         variant="primary"
                                         size="sm"
                                         disabled={isUploading}
-                                        className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}
+                                        className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
                                       >
                                         {isUploading ? (
                                           <>
@@ -701,7 +822,7 @@ export default function PaymentPage() {
                                     variant="primary"
                                     size="sm"
                                     disabled={isUploading}
-                                    className={isUploading ? "bg-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}
+                                    className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
                                   >
                                     {isUploading ? (
                                       <>
@@ -739,7 +860,7 @@ export default function PaymentPage() {
                                 onClick={() => handleUploadProof(payment.id)} 
                                 variant="primary"
                                 size="sm"
-                                className="w-fit mt-1 bg-green-600 hover:bg-green-700"
+                                className="w-fit mt-1 bg-[#1E88E5] hover:bg-[#0D47A1]"
                               >
                                 Upload Proof
                               </Button>
