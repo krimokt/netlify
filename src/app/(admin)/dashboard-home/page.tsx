@@ -36,48 +36,6 @@ interface CacheData {
   userId: string;
 }
 
-// Debugging component to check Supabase connection
-const SupabaseDebug = () => {
-  const [debug, setDebug] = useState({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL || 'Not set',
-    hasKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Not set',
-    connected: false,
-    checking: true,
-    error: null as string | null
-  });
-
-  useEffect(() => {
-    async function checkConnection() {
-      try {
-        const { error } = await supabase.from('quotations').select('count()', { count: 'exact', head: true });
-        if (error) {
-          setDebug(prev => ({ ...prev, checking: false, error: error.message }));
-        } else {
-          setDebug(prev => ({ ...prev, checking: false, connected: true }));
-        }
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        setDebug(prev => ({ ...prev, checking: false, error: errorMessage }));
-      }
-    }
-    checkConnection();
-  }, []);
-
-  if (!debug.checking && debug.connected) return null;
-
-  return (
-    <div className="col-span-12 bg-yellow-100 dark:bg-yellow-900 p-4 rounded-lg">
-      <h3 className="text-yellow-800 dark:text-yellow-200 font-bold">Supabase Connection Debug</h3>
-      <div className="mt-2 text-sm">
-        <p>URL: {debug.url}</p>
-        <p>Key: {debug.hasKey}</p>
-        <p>Status: {debug.checking ? 'Checking...' : debug.connected ? 'Connected' : 'Not connected'}</p>
-        {debug.error && <p className="text-red-600 dark:text-red-400">Error: {debug.error}</p>}
-      </div>
-    </div>
-  );
-};
-
 // Define the type for quotation data
 interface QuotationItem {
   id: string;
@@ -381,7 +339,6 @@ export default function DashboardHome() {
   
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
-      <SupabaseDebug />
       {/* Metric Cards Section */}
       <div className="col-span-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
@@ -420,10 +377,7 @@ export default function DashboardHome() {
                   {metrics.activeShipments}
                 </h4>
               </div>
-              <Badge color="success">
-                <ArrowUpIcon />
-                12.3%
-              </Badge>
+
             </div>
           </div>
 
