@@ -30,12 +30,23 @@ interface QuotationInfo {
   imageUrl?: string;
 }
 
+// Cache configuration
+const CACHE_KEY = 'payment_data_cache';
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 // Define types for error to avoid using 'any'
 interface SupabaseError {
   message: string;
   details?: string;
   hint?: string;
   code?: string;
+}
+
+// Define the cache structure
+interface CacheData {
+  payments: PaymentInfo[];
+  quotationsMap: Record<string, QuotationInfo[]>;
+  timestamp: number;
 }
 
 export default function PaymentPage() {
@@ -49,11 +60,13 @@ export default function PaymentPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    const loadData = async () => {
       try {
+        // First check authentication
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError) {
@@ -65,224 +78,235 @@ export default function PaymentPage() {
           return;
         }
         
-        return user;
-      } catch (error: unknown) {
-        const supabaseError = error as SupabaseError;
-        setError(supabaseError.message);
-        return null;
-      }
-    };
-
-    const fetchPayments = async (userId: string) => {
-      try {
-        // Fetch payments from Supabase using updated column names
-        const { data, error } = await supabase
-          .from('payments')
-          .select(`
-            id,
-            total_amount,
-            status,
-            created_at,
-            method,
-            proof_url
-          `)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          throw error;
-        }
-
-        // Format the payment data with the new column names
-        const formattedPayments = data.map((payment: Record<string, unknown>) => ({
-          id: payment.id as string,
-          amount: payment.total_amount as number,
-          status: payment.status as "pending" | "processing" | "completed" | "failed",
-          date: new Date((payment.created_at as string)).toLocaleDateString(),
-          quotations: [], // Will be populated from payment_quotations
-          paymentMethod: payment.method as string,
-          proofUrl: payment.proof_url as string | undefined
-        }));
-
-        setPayments(formattedPayments);
+        // Try to get data from cache first
+        const cachedData = getCachedData(user.id);
         
-        // Fetch quotation details for all payments
-        await fetchQuotationDetails(formattedPayments);
+        if (cachedData && !isRefreshing) {
+          // Use cached data if available and not explicitly refreshing
+          console.log('Using cached payment data');
+          setPayments(cachedData.payments);
+          setQuotationsMap(cachedData.quotationsMap);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Fetch fresh data from database
+        await fetchPayments(user.id);
+        
       } catch (error: unknown) {
         const supabaseError = error as SupabaseError;
         setError(supabaseError.message);
-      } finally {
         setIsLoading(false);
       }
     };
 
-    const fetchQuotationDetails = async (paymentsData: PaymentInfo[]) => {
-      try {
-        if (paymentsData.length === 0) return;
-        
-        // For each payment, get quotations from the payment_quotations junction table
-        for (const payment of paymentsData) {
-          try {
-            // Get associated quotation IDs from junction table
-            const { data: junctionData, error: junctionError } = await supabase
-              .from('payment_quotations')
-              .select('quotation_id, payment_id')
-              .eq('payment_id', payment.id);
+    loadData();
+    // Reset refreshing flag after data load
+    setIsRefreshing(false);
+  }, [router, isRefreshing]);
+
+  // Function to get cached data if valid
+  const getCachedData = (userId: string): CacheData | null => {
+    try {
+      const cachedDataString = localStorage.getItem(`${CACHE_KEY}_${userId}`);
+      if (!cachedDataString) return null;
+      
+      const cachedData = JSON.parse(cachedDataString) as CacheData;
+      const now = Date.now();
+      
+      // Check if cache is still valid (not expired)
+      if (now - cachedData.timestamp < CACHE_EXPIRY) {
+        return cachedData;
+      }
+      
+      // Clear expired cache
+      localStorage.removeItem(`${CACHE_KEY}_${userId}`);
+      return null;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  };
+
+  // Function to save data to cache
+  const saveToCache = (userId: string, data: CacheData) => {
+    try {
+      localStorage.setItem(`${CACHE_KEY}_${userId}`, JSON.stringify({
+        ...data,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+      // If caching fails, just continue without caching
+    }
+  };
+
+  const fetchPayments = async (userId: string) => {
+    try {
+      // Fetch payments from Supabase using updated column names
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          total_amount,
+          status,
+          created_at,
+          method,
+          proof_url,
+          quotation_ids
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Format the payment data with the new column names
+      const formattedPayments = data.map((payment: Record<string, unknown>) => ({
+        id: payment.id as string,
+        amount: payment.total_amount as number,
+        status: payment.status as "pending" | "processing" | "completed" | "failed",
+        date: new Date((payment.created_at as string)).toLocaleDateString(),
+        quotations: (payment.quotation_ids as string[] || []), // Use quotation_ids directly if available
+        paymentMethod: payment.method as string,
+        proofUrl: payment.proof_url as string | undefined
+      }));
+
+      setPayments(formattedPayments);
+      
+      // Fetch all quotation details at once
+      const quotationMap = await fetchAllQuotationDetails(formattedPayments);
+      
+      // Cache the data for future use
+      saveToCache(userId, {
+        payments: formattedPayments,
+        quotationsMap: quotationMap,
+        timestamp: Date.now()
+      });
+      
+    } catch (error: unknown) {
+      const supabaseError = error as SupabaseError;
+      setError(supabaseError.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchAllQuotationDetails = async (paymentsData: PaymentInfo[]) => {
+    const quotationMap: Record<string, QuotationInfo[]> = {};
+    
+    try {
+      if (paymentsData.length === 0) return quotationMap;
+      
+      // Collect all quotation IDs across all payments
+      const allQuotationIds: string[] = [];
+      const quotationToPaymentMap: Record<string, string> = {};
+      
+      // First get all relevant quotation IDs
+      for (const payment of paymentsData) {
+        if (payment.quotations.length > 0) {
+          // Already has quotation IDs
+          payment.quotations.forEach(qId => {
+            allQuotationIds.push(qId);
+            quotationToPaymentMap[qId] = payment.id;
+          });
+        } else {
+          // Try to get from junction table - could optimize this in the future
+          const { data: junctionData } = await supabase
+            .from('payment_quotations')
+            .select('quotation_id')
+            .eq('payment_id', payment.id);
             
-            if (junctionError) {
-              console.error("Error fetching payment-quotation links:", junctionError);
-              console.log("Junction table error details:", JSON.stringify(junctionError, null, 2));
-            }
+          if (junctionData && junctionData.length > 0) {
+            const ids = junctionData.map(item => item.quotation_id);
+            // Update the payment with quotation IDs
+            payment.quotations = ids;
             
-            // Get the quotation IDs from the junction table
-            let quotationIds: string[] = [];
-            
-            if (junctionData && junctionData.length > 0) {
-              console.log(`Found ${junctionData.length} quotation links for payment ID: ${payment.id}`);
-              quotationIds = junctionData.map(item => item.quotation_id);
-            } else {
-              console.log(`No junction data found for payment ID: ${payment.id}, checking quotation_ids array...`);
-              
-              // If no junction data, try to get quotation IDs from the quotation_ids array field
-              const { data: paymentData, error: paymentError } = await supabase
-                .from('payments')
-                .select('quotation_ids')
-                .eq('id', payment.id)
-                .single();
-              
-              if (paymentError) {
-                console.error(`Error fetching quotation_ids for payment ID: ${payment.id}`, paymentError);
-              } else if (paymentData && paymentData.quotation_ids && Array.isArray(paymentData.quotation_ids)) {
-                console.log(`Found ${paymentData.quotation_ids.length} quotation IDs in array for payment ID: ${payment.id}`);
-                quotationIds = paymentData.quotation_ids;
-              }
-            }
-            
-            // If no quotation IDs found from either source, skip this payment
-            if (quotationIds.length === 0) {
-              console.log(`No quotation IDs found for payment ID: ${payment.id}`);
-              continue;
-            }
-            
-            // Update the payment's quotations array
-            payment.quotations = quotationIds;
-            console.log("Quotation IDs:", quotationIds);
-            
-            // Directly try to fetch each quotation individually first for better error messages
-            const quotationResults = [];
-            
-            for (const quotationId of quotationIds) {
-              try {
-                // Try to get this specific quotation
-                const { data: singleQuotation, error: singleQuotationError } = await supabase
-                  .from('quotations')
-                  .select('*')
-                  .eq('id', quotationId)
-                  .single();
-                
-                if (singleQuotationError) {
-                  console.error(`Error fetching quotation ID: ${quotationId}`, singleQuotationError);
-                  continue; // Skip this quotation
-                }
-                
-                if (singleQuotation) {
-                  console.log(`Successfully fetched quotation: ${quotationId}`);
-                  quotationResults.push(singleQuotation);
-                } else {
-                  console.warn(`Quotation not found: ${quotationId}`);
-                }
-              } catch (singleError) {
-                console.error(`Exception fetching quotation ID: ${quotationId}`, singleError);
-              }
-            }
-            
-            console.log(`Successfully fetched ${quotationResults.length} out of ${quotationIds.length} quotations`);
-            
-            if (quotationResults.length === 0) {
-              console.log(`No quotation details could be retrieved for payment ID: ${payment.id}`);
-              continue;
-            }
-            
-            // Process and format quotation data
-            const formattedQuotations = quotationResults.map(q => {
-              // Handle image processing
-              let imageUrl = "/images/product/product-01.jpg";
-              let hasImage = false;
-              
-              if (q.image_url) {
-                imageUrl = q.image_url;
-                hasImage = true;
-              }
-              else if (q.product_images && q.product_images.length > 0) {
-                const rawImageUrl = q.product_images[0];
-                
-                if (rawImageUrl) {
-                  try {
-                    if (rawImageUrl.startsWith('/')) {
-                      imageUrl = rawImageUrl;
-                      hasImage = true;
-                    } 
-                    else if (rawImageUrl.includes('supabase.co/storage/v1/object/public')) {
-                      imageUrl = rawImageUrl;
-                      hasImage = true;
-                    }
-                    else if (!rawImageUrl.includes('://') && !rawImageUrl.startsWith('/')) {
-                      imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${rawImageUrl}`;
-                      hasImage = true;
-                    }
-                    else if ((rawImageUrl.startsWith('http://') || rawImageUrl.startsWith('https://'))) {
-                      imageUrl = rawImageUrl;
-                      hasImage = true;
-                    }
-                  } catch {
-                    // Ignore error and use default values
-                    console.warn("Invalid image URL:", rawImageUrl);
-                    hasImage = false;
-                  }
-                }
-              }
-              
-              return {
-                id: q.quotation_id || `QT-${q.id}`,
-                uuid: q.id,
-                product_name: q.product_name,
-                quantity: q.quantity,
-                status: q.status,
-                created_at: new Date(q.created_at).toLocaleDateString(),
-                product_images: q.product_images || [],
-                hasImage,
-                imageUrl
-              };
+            ids.forEach(qId => {
+              allQuotationIds.push(qId);
+              quotationToPaymentMap[qId] = payment.id;
             });
-              
-            // Update the quotations map with this payment's quotations
-            setQuotationsMap(prev => ({
-              ...prev,
-              [payment.id]: formattedQuotations
-            }));
-          } catch (err) {
-            console.error("Exception processing payment:", err);
-            // Continue to next payment
           }
         }
-      } catch (error: unknown) {
-        console.error("Error fetching quotation details:", error);
-        if (error instanceof Error) {
-          console.log("Error message:", error.message);
-          console.log("Error stack:", error.stack);
+      }
+      
+      // If no quotation IDs found, return empty map
+      if (allQuotationIds.length === 0) {
+        return quotationMap;
+      }
+      
+      // Fetch all quotations in a single query - much more efficient!
+      const { data: allQuotations, error: quotationsError } = await supabase
+        .from('quotations')
+        .select('*')
+        .in('id', allQuotationIds);
+      
+      if (quotationsError) {
+        console.error("Error fetching quotations:", quotationsError);
+        return quotationMap;
+      }
+      
+      if (!allQuotations || allQuotations.length === 0) {
+        console.log("No quotations found for the provided IDs");
+        return quotationMap;
+      }
+      
+      // Process all quotations and organize them by payment ID
+      allQuotations.forEach(q => {
+        const paymentId = quotationToPaymentMap[q.id];
+        if (!paymentId) return; // Skip if no payment ID mapping found
+        
+        // Initialize array for this payment if needed
+        if (!quotationMap[paymentId]) {
+          quotationMap[paymentId] = [];
         }
-      }
-    };
-
-    const init = async () => {
-      const user = await fetchUser();
-      if (user) {
-        await fetchPayments(user.id);
-      }
-    };
-
-    init();
-  }, [router]);
+        
+        // Process image URL - simplified logic
+        let imageUrl = "/images/product/product-01.jpg";
+        let hasImage = false;
+        
+        if (q.image_url) {
+          imageUrl = q.image_url;
+          hasImage = true;
+        }
+        else if (q.product_images && q.product_images.length > 0 && q.product_images[0]) {
+          imageUrl = q.product_images[0];
+          hasImage = true;
+          
+          // Make sure image URL is fully qualified
+          if (!imageUrl.includes('://') && !imageUrl.startsWith('/')) {
+            imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${imageUrl}`;
+          }
+        }
+        
+        // Create formatted quotation object
+        const formattedQuotation: QuotationInfo = {
+          id: q.quotation_id || `QT-${q.id}`,
+          uuid: q.id,
+          product_name: q.product_name,
+          quantity: q.quantity,
+          status: q.status,
+          created_at: new Date(q.created_at).toLocaleDateString(),
+          product_images: q.product_images || [],
+          hasImage,
+          imageUrl
+        };
+        
+        // Add to the map
+        quotationMap[paymentId].push(formattedQuotation);
+      });
+      
+      // Update state with the complete quotation map
+      setQuotationsMap(quotationMap);
+      
+      return quotationMap;
+      
+    } catch (error) {
+      console.error("Error processing quotations:", error);
+      return quotationMap;
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -297,6 +321,11 @@ export default function PaymentPage() {
       default:
         return 'light';
     }
+  };
+
+  const handleRefreshData = () => {
+    setIsLoading(true);
+    setIsRefreshing(true);
   };
 
   const handleUploadProof = (paymentId: string) => {
@@ -431,6 +460,24 @@ export default function PaymentPage() {
         )
       );
       
+      // Also update cache after successful upload
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const cachedData = getCachedData(user.id);
+        if (cachedData) {
+          cachedData.payments = cachedData.payments.map(payment => 
+            payment.id === currentPaymentId 
+              ? { 
+                  ...payment, 
+                  status: 'processing',
+                  proofUrl: publicUrl
+                } 
+              : payment
+          );
+          saveToCache(user.id, cachedData);
+        }
+      }
+      
       setUploadSuccess(true);
       
       // Reset state after short delay
@@ -497,6 +544,27 @@ export default function PaymentPage() {
           <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-white/90">
           Payment History
           </h1>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="text-[#1E88E5] border-[#1E88E5] hover:bg-blue-50"
+            onClick={handleRefreshData}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <>
+                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </>
+            )}
+          </Button>
       </div>
 
       {/* Bank Accounts Section - updated for white bg in dark mode */}
