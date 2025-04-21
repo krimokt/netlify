@@ -251,6 +251,8 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
         
         if (!isConfirmed) {
           setIsProcessing(false);
+          // Redirect to payment page
+          window.location.href = '/payment';
           return;
         }
         

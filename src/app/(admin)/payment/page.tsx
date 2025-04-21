@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Button from "@/components/ui/button/Button";
-import Badge from "@/components/ui/badge/Badge";
 
 interface PaymentInfo {
   id: string;
@@ -707,19 +706,38 @@ export default function PaymentPage() {
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {payments.map((payment) => (
               <div key={payment.id} className="p-5">
-                <div className="flex flex-col md:flex-row justify-between gap-4">
+                <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900 dark:text-white">
-                        Payment #{payment.id.slice(-6)}
-                      </h3>
-                      <Badge color={getStatusColor(payment.status)}>{payment.status}</Badge>
-          </div>
-
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      <p>Date: {payment.date}</p>
-                      <p>Payment Method: {payment.paymentMethod}</p>
-          </div>
+                      <span className="text-sm text-gray-500">Payment ID:</span>
+                      <span className="font-medium">{payment.id}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm text-gray-500">Date:</span>
+                      <span>{payment.date}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm text-gray-500">Method:</span>
+                      <span className="capitalize">{payment.paymentMethod.toLowerCase().replace('_', ' ')}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">Status:</span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(payment.status)}`}>
+                        {payment.status}
+                      </span>
+                    </div>
+                    {payment.quotations && payment.quotations.length > 0 && (
+                      <div className="mt-2">
+                        <span className="text-sm text-gray-500">Quotation IDs:</span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {payment.quotations.map((qId) => (
+                            <span key={qId} className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-full">
+                              {qId}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col md:items-end gap-2">
@@ -762,69 +780,55 @@ export default function PaymentPage() {
                             </p>
                             
                             {currentPaymentId === payment.id && (
-                              <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-3 bg-gray-50 dark:bg-gray-900">
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                                  Replace with a new payment proof:
+                              <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                  Replace with a new payment proof (JPG, PNG, or PDF up to 5MB):
                                 </p>
                                 
-                                <div className="flex flex-wrap gap-3 items-end">
+                                <div className="flex flex-wrap gap-3 items-center">
                                   <div>
                                     <input
                                       type="file"
                                       accept="image/jpeg,image/png,application/pdf"
-                                      className="hidden"
+                                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                       ref={fileInputRef}
                                       onChange={handleFileChange}
                                     />
-                                    <Button
-                                      type="button" 
-                                      onClick={() => fileInputRef.current?.click()}
-                                      variant="outline"
-                                      size="sm"
-                                      className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                                    >
-                                      Select File
-                                    </Button>
-              </div>
+                                  </div>
                                   
                                   {fileInputRef.current?.files?.[0] && (
-                                    <>
-                                      <span className="text-xs text-gray-600 dark:text-gray-400">
-                                        {fileInputRef.current.files[0].name}
-                                      </span>
-                                      <Button
-                                        type="submit"
-                                        variant="primary"
-                                        size="sm"
-                                        disabled={isUploading}
-                                        className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
-                                      >
-                                        {isUploading ? (
-                                          <>
-                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                                            Uploading...
-                                          </>
-                                        ) : (
-                                          "Upload"
-                                        )}
-                                      </Button>
-                                    </>
-                )}
-                      </div>
+                                    <Button
+                                      type="submit"
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={isUploading}
+                                      className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
+                                    >
+                                      {isUploading ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                                          Uploading...
+                                        </>
+                                      ) : (
+                                        "Upload"
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
                                 
                                 {uploadError && (
                                   <div className="mt-2 text-sm text-red-600 dark:text-red-400">
                                     {uploadError}
-                    </div>
-      )}
-                
+                                  </div>
+                                )}
+                                
                                 {uploadSuccess && (
                                   <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
                                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                </svg>
+                                    </svg>
                                     Upload successful!
-                  </div>
+                                  </div>
                                 )}
                               </form>
                             )}
@@ -931,10 +935,6 @@ export default function PaymentPage() {
                       )}
                     </div>
                   
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Quotations in this payment:
-                    </h4>
-                    
                     {quotationsMap[payment.id]?.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {quotationsMap[payment.id].map((quotation) => (
@@ -955,8 +955,8 @@ export default function PaymentPage() {
                                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-            </div>
+                                  </svg>
+                                </div>
                               )}
                             </div>
                             <div className="flex-grow">
@@ -973,7 +973,7 @@ export default function PaymentPage() {
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No quotations found for this payment.
+                        
                       </p>
                     )}
                 </div>
