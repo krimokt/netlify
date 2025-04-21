@@ -21,12 +21,7 @@ export interface QuotationData {
   id: string;
   // The display ID (e.g., QT-1234567890)
   quotation_id: string;
-  product: {
-    name: string;
-    image: string;
-    category?: string;
-    description?: string;
-  };
+  product: QuotationProduct;
   quantity: string;
   date: string;
   status: string;
