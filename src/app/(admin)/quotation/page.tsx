@@ -298,7 +298,7 @@ export default function QuotationPage() {
       // If there's only one quotation, use single quotation flow
       if (selectedQuotations.length === 1) {
         const quotationId = selectedQuotations[0].quotation_id || selectedQuotations[0].id;
-        const url = `/payment`;
+        const url = `/payment?quotationId=${quotationId}`;
         window.location.href = url;
         return;
       }
