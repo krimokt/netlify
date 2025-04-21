@@ -13,6 +13,8 @@ const clientRoutes = [
   '/order',
   '/payment',
   '/shipment-tracking',
+  '/payment-example',
+  '/checkoutpage',
   
   
 ];
