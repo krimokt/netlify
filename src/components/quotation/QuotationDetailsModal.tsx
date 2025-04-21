@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { Modal } from "@/components/ui/modal";
 import { CloseIcon } from "@/icons";
@@ -8,16 +8,6 @@ import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 import { supabase } from "@/lib/supabase";
 import { QuotationData } from '@/types/quotation';
-
-interface PriceOption {
-  id: string;
-  price: string;
-  supplier: string;
-  deliveryTime: string;
-  description?: string;
-  modelName?: string;
-  modelImage?: string;
-}
 
 interface QuotationDetailsProps {
   isOpen: boolean;

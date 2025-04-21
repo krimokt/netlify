@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -63,6 +63,171 @@ export default function PaymentPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const fetchAllQuotationDetails = useCallback(async (paymentsData: PaymentInfo[]) => {
+    const quotationMap: Record<string, QuotationInfo[]> = {};
+    
+    try {
+      if (paymentsData.length === 0) return quotationMap;
+      
+      // Collect all quotation IDs across all payments
+      const allQuotationIds: string[] = [];
+      const quotationToPaymentMap: Record<string, string> = {};
+      
+      // First get all relevant quotation IDs
+        for (const payment of paymentsData) {
+        if (payment.quotations.length > 0) {
+          // Already has quotation IDs
+          payment.quotations.forEach(qId => {
+            allQuotationIds.push(qId);
+            quotationToPaymentMap[qId] = payment.id;
+          });
+        } else {
+          // Try to get from junction table - could optimize this in the future
+          const { data: junctionData } = await supabase
+              .from('payment_quotations')
+            .select('quotation_id')
+              .eq('payment_id', payment.id);
+            
+            if (junctionData && junctionData.length > 0) {
+            const ids = junctionData.map(item => item.quotation_id);
+            // Update the payment with quotation IDs
+            payment.quotations = ids;
+            
+            ids.forEach(qId => {
+              allQuotationIds.push(qId);
+              quotationToPaymentMap[qId] = payment.id;
+            });
+          }
+        }
+      }
+      
+      // If no quotation IDs found, return empty map
+      if (allQuotationIds.length === 0) {
+        return quotationMap;
+      }
+      
+      // Fetch all quotations in a single query - much more efficient!
+      const { data: allQuotations, error: quotationsError } = await supabase
+                  .from('quotations')
+                  .select('*')
+        .in('id', allQuotationIds);
+      
+      if (quotationsError) {
+        console.error("Error fetching quotations:", quotationsError);
+        return quotationMap;
+      }
+      
+      if (!allQuotations || allQuotations.length === 0) {
+        console.log("No quotations found for the provided IDs");
+        return quotationMap;
+      }
+      
+      // Process all quotations and organize them by payment ID
+      allQuotations.forEach(q => {
+        const paymentId = quotationToPaymentMap[q.id];
+        if (!paymentId) return; // Skip if no payment ID mapping found
+        
+        // Initialize array for this payment if needed
+        if (!quotationMap[paymentId]) {
+          quotationMap[paymentId] = [];
+        }
+        
+        // Process image URL - simplified logic
+              let imageUrl = "/images/product/product-01.jpg";
+              let hasImage = false;
+              
+              if (q.image_url) {
+                imageUrl = q.image_url;
+                hasImage = true;
+              }
+        else if (q.product_images && q.product_images.length > 0 && q.product_images[0]) {
+          imageUrl = q.product_images[0];
+                      hasImage = true;
+          
+          // Make sure image URL is fully qualified
+          if (!imageUrl.includes('://') && !imageUrl.startsWith('/')) {
+            imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${imageUrl}`;
+          }
+        }
+        
+        // Create formatted quotation object
+        const formattedQuotation: QuotationInfo = {
+                id: q.quotation_id || `QT-${q.id}`,
+                uuid: q.id,
+                product_name: q.product_name,
+                quantity: q.quantity,
+                status: q.status,
+                created_at: new Date(q.created_at).toLocaleDateString(),
+                product_images: q.product_images || [],
+                hasImage,
+                imageUrl
+              };
+        
+        // Add to the map
+        quotationMap[paymentId].push(formattedQuotation);
+      });
+      
+      // Return the complete map
+      return quotationMap;
+      
+    } catch (error) {
+      console.error("Error processing quotation details:", error);
+      return quotationMap;
+    }
+  }, []);
+
+  const fetchPayments = useCallback(async (userId: string) => {
+    try {
+      // Fetch payments from Supabase using updated column names
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          total_amount,
+          status,
+          created_at,
+          method,
+        proof_url,
+        quotation_ids
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Format the payment data with the new column names
+      const formattedPayments = data.map((payment: Record<string, unknown>) => ({
+        id: payment.id as string,
+        amount: payment.total_amount as number,
+        status: payment.status as "pending" | "processing" | "completed" | "failed",
+        date: new Date((payment.created_at as string)).toLocaleDateString(),
+      quotations: (payment.quotation_ids as string[] || []), // Use quotation_ids directly if available
+        paymentMethod: payment.method as string,
+        proofUrl: payment.proof_url as string | undefined
+      }));
+
+      setPayments(formattedPayments);
+      
+    // Fetch all quotation details at once
+    const quotationMap = await fetchAllQuotationDetails(formattedPayments);
+    
+    // Cache the data for future use
+    saveToCache(userId, {
+      payments: formattedPayments,
+      quotationsMap: quotationMap,
+      timestamp: Date.now()
+    });
+    
+    } catch (error: unknown) {
+      const supabaseError = error as SupabaseError;
+      setError(supabaseError.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchAllQuotationDetails]);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -103,7 +268,7 @@ export default function PaymentPage() {
     loadData();
     // Reset refreshing flag after data load
     setIsRefreshing(false);
-  }, [router, isRefreshing]);
+  }, [router, isRefreshing, fetchPayments]);
 
   // Function to get cached data if valid
   const getCachedData = (userId: string): CacheData | null => {
@@ -124,9 +289,9 @@ export default function PaymentPage() {
       return null;
     } catch (error) {
       console.error('Error reading from cache:', error);
-      return null;
-    }
-  };
+        return null;
+      }
+    };
 
   // Function to save data to cache
   const saveToCache = (userId: string, data: CacheData) => {
@@ -138,173 +303,6 @@ export default function PaymentPage() {
     } catch (error) {
       console.error('Error saving to cache:', error);
       // If caching fails, just continue without caching
-    }
-  };
-
-  const fetchPayments = async (userId: string) => {
-    try {
-      // Fetch payments from Supabase using updated column names
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          id,
-          total_amount,
-          status,
-          created_at,
-          method,
-          proof_url,
-          quotation_ids
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      // Format the payment data with the new column names
-      const formattedPayments = data.map((payment: Record<string, unknown>) => ({
-        id: payment.id as string,
-        amount: payment.total_amount as number,
-        status: payment.status as "pending" | "processing" | "completed" | "failed",
-        date: new Date((payment.created_at as string)).toLocaleDateString(),
-        quotations: (payment.quotation_ids as string[] || []), // Use quotation_ids directly if available
-        paymentMethod: payment.method as string,
-        proofUrl: payment.proof_url as string | undefined
-      }));
-
-      setPayments(formattedPayments);
-      
-      // Fetch all quotation details at once
-      const quotationMap = await fetchAllQuotationDetails(formattedPayments);
-      
-      // Cache the data for future use
-      saveToCache(userId, {
-        payments: formattedPayments,
-        quotationsMap: quotationMap,
-        timestamp: Date.now()
-      });
-      
-    } catch (error: unknown) {
-      const supabaseError = error as SupabaseError;
-      setError(supabaseError.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchAllQuotationDetails = async (paymentsData: PaymentInfo[]) => {
-    const quotationMap: Record<string, QuotationInfo[]> = {};
-    
-    try {
-      if (paymentsData.length === 0) return quotationMap;
-      
-      // Collect all quotation IDs across all payments
-      const allQuotationIds: string[] = [];
-      const quotationToPaymentMap: Record<string, string> = {};
-      
-      // First get all relevant quotation IDs
-      for (const payment of paymentsData) {
-        if (payment.quotations.length > 0) {
-          // Already has quotation IDs
-          payment.quotations.forEach(qId => {
-            allQuotationIds.push(qId);
-            quotationToPaymentMap[qId] = payment.id;
-          });
-        } else {
-          // Try to get from junction table - could optimize this in the future
-          const { data: junctionData } = await supabase
-            .from('payment_quotations')
-            .select('quotation_id')
-            .eq('payment_id', payment.id);
-            
-          if (junctionData && junctionData.length > 0) {
-            const ids = junctionData.map(item => item.quotation_id);
-            // Update the payment with quotation IDs
-            payment.quotations = ids;
-            
-            ids.forEach(qId => {
-              allQuotationIds.push(qId);
-              quotationToPaymentMap[qId] = payment.id;
-            });
-          }
-        }
-      }
-      
-      // If no quotation IDs found, return empty map
-      if (allQuotationIds.length === 0) {
-        return quotationMap;
-      }
-      
-      // Fetch all quotations in a single query - much more efficient!
-      const { data: allQuotations, error: quotationsError } = await supabase
-        .from('quotations')
-        .select('*')
-        .in('id', allQuotationIds);
-      
-      if (quotationsError) {
-        console.error("Error fetching quotations:", quotationsError);
-        return quotationMap;
-      }
-      
-      if (!allQuotations || allQuotations.length === 0) {
-        console.log("No quotations found for the provided IDs");
-        return quotationMap;
-      }
-      
-      // Process all quotations and organize them by payment ID
-      allQuotations.forEach(q => {
-        const paymentId = quotationToPaymentMap[q.id];
-        if (!paymentId) return; // Skip if no payment ID mapping found
-        
-        // Initialize array for this payment if needed
-        if (!quotationMap[paymentId]) {
-          quotationMap[paymentId] = [];
-        }
-        
-        // Process image URL - simplified logic
-        let imageUrl = "/images/product/product-01.jpg";
-        let hasImage = false;
-        
-        if (q.image_url) {
-          imageUrl = q.image_url;
-          hasImage = true;
-        }
-        else if (q.product_images && q.product_images.length > 0 && q.product_images[0]) {
-          imageUrl = q.product_images[0];
-          hasImage = true;
-          
-          // Make sure image URL is fully qualified
-          if (!imageUrl.includes('://') && !imageUrl.startsWith('/')) {
-            imageUrl = `https://cfhochnjniddaztgwrbk.supabase.co/storage/v1/object/public/quotation-images/product-images/${imageUrl}`;
-          }
-        }
-        
-        // Create formatted quotation object
-        const formattedQuotation: QuotationInfo = {
-          id: q.quotation_id || `QT-${q.id}`,
-          uuid: q.id,
-          product_name: q.product_name,
-          quantity: q.quantity,
-          status: q.status,
-          created_at: new Date(q.created_at).toLocaleDateString(),
-          product_images: q.product_images || [],
-          hasImage,
-          imageUrl
-        };
-        
-        // Add to the map
-        quotationMap[paymentId].push(formattedQuotation);
-      });
-      
-      // Update state with the complete quotation map
-      setQuotationsMap(quotationMap);
-      
-      return quotationMap;
-      
-    } catch (error) {
-      console.error("Error processing quotations:", error);
-      return quotationMap;
     }
   };
 
@@ -415,7 +413,7 @@ export default function PaymentPage() {
       if (!urlData || !urlData.publicUrl) {
         throw new Error("Failed to generate public URL");
       }
-      
+        
       const publicUrl = urlData.publicUrl;
       console.log("Generated public URL:", publicUrl);
       
@@ -716,25 +714,25 @@ export default function PaymentPage() {
                         Payment #{payment.id.slice(-6)}
                       </h3>
                       <Badge color={getStatusColor(payment.status)}>{payment.status}</Badge>
-                    </div>
+          </div>
 
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                       <p>Date: {payment.date}</p>
                       <p>Payment Method: {payment.paymentMethod}</p>
-                    </div>
+          </div>
                   </div>
 
                   <div className="flex flex-col md:items-end gap-2">
                     <div className="text-xl font-bold text-gray-900 dark:text-white">${payment.amount.toFixed(2)}</div>
 
-                    <Button
-                      onClick={() => handleUploadProof(payment.id)}
-                      variant="primary"
-                      size="sm"
+                      <Button
+                        onClick={() => handleUploadProof(payment.id)}
+                        variant="primary"
+                        size="sm"
                       className={payment.proofUrl ? "bg-[#1E88E5] hover:bg-[#0D47A1]" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
-                    >
+                      >
                       {payment.proofUrl ? "Update Proof" : "Upload Proof"}
-                    </Button>
+                      </Button>
                     
                     <Button
                       onClick={() => toggleExpandPayment(payment.id)}
@@ -754,8 +752,8 @@ export default function PaymentPage() {
                     <div className="mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
                       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                         Payment Proof
-                      </h4>
-                      
+                    </h4>
+                    
                       {payment.proofUrl ? (
                         <div className="flex flex-col md:flex-row gap-4 items-start">
                           <div className="mt-2 md:mt-0">
@@ -787,7 +785,7 @@ export default function PaymentPage() {
                                     >
                                       Select File
                                     </Button>
-                                  </div>
+              </div>
                                   
                                   {fileInputRef.current?.files?.[0] && (
                                     <>
@@ -811,22 +809,22 @@ export default function PaymentPage() {
                                         )}
                                       </Button>
                                     </>
-                                  )}
-                                </div>
+                )}
+                      </div>
                                 
                                 {uploadError && (
                                   <div className="mt-2 text-sm text-red-600 dark:text-red-400">
                                     {uploadError}
-                                  </div>
-                                )}
-                                
+                    </div>
+      )}
+                
                                 {uploadSuccess && (
                                   <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
                                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
+                </svg>
                                     Upload successful!
-                                  </div>
+                  </div>
                                 )}
                               </form>
                             )}
@@ -841,68 +839,68 @@ export default function PaymentPage() {
                                 Replace Proof
                               </Button>
                             )}
-                          </div>
-                        </div>
-                      ) : (
+                  </div>
+              </div>
+            ) : (
                         <div>
                           {currentPaymentId === payment.id ? (
-                            <form onSubmit={handleUploadSubmit}>
+              <form onSubmit={handleUploadSubmit}>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                                 Please upload a screenshot or photo of your payment receipt.
                                 Accepted formats: JPG, PNG, PDF (max 5MB).
                               </p>
                               
                               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 mb-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <input
-                                  type="file"
-                                  accept="image/jpeg,image/png,application/pdf"
-                                  className="hidden"
-                                  ref={fileInputRef}
-                                  onChange={handleFileChange}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => fileInputRef.current?.click()}
-                                  className="w-full h-full flex flex-col items-center justify-center"
-                                >
+                    <input
+                      type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        className="hidden"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full h-full flex flex-col items-center justify-center"
+                      >
                                   <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                  </svg>
-                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Click to select file or drag and drop
-                                  </span>
-                                </button>
-                              </div>
-                              
-                              {fileInputRef.current?.files?.[0] && (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Click to select file or drag and drop
+                        </span>
+                      </button>
+                </div>
+                    
+                    {fileInputRef.current?.files?.[0] && (
                                 <div className="flex items-center justify-between mt-2 mb-3">
-                                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    Selected: <span className="font-medium">{fileInputRef.current.files[0].name}</span>
-                                  </span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          Selected: <span className="font-medium">{fileInputRef.current.files[0].name}</span>
+                        </span>
                                   
-                                  <Button
+              <Button
                                     type="submit"
                                     variant="primary"
                                     size="sm"
-                                    disabled={isUploading}
+                    disabled={isUploading}
                                     className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
-                                  >
-                                    {isUploading ? (
-                                      <>
+                  >
+                    {isUploading ? (
+                      <>
                                         <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                                        Uploading...
-                                      </>
-                                    ) : (
-                                      "Upload Proof"
-                                    )}
-                                  </Button>
-                                </div>
-                              )}
+                        Uploading...
+                      </>
+                      ) : (
+                        "Upload Proof"
+                      )}
+                </Button>
+                </div>
+              )}
                               
                               {uploadError && (
                                 <div className="mt-2 text-sm text-red-600 dark:text-red-400">
                                   {uploadError}
-                                </div>
+            </div>
                               )}
                               
                               {uploadSuccess && (
@@ -911,7 +909,7 @@ export default function PaymentPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                   </svg>
                                   Upload successful!
-                                </div>
+          </div>
                               )}
                             </form>
                           ) : (
@@ -927,8 +925,8 @@ export default function PaymentPage() {
                               >
                                 Upload Proof
                               </Button>
-                            </div>
-                          )}
+        </div>
+      )}
                         </div>
                       )}
                     </div>
@@ -957,8 +955,8 @@ export default function PaymentPage() {
                                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
+                </svg>
+            </div>
                               )}
                             </div>
                             <div className="flex-grow">
@@ -978,13 +976,13 @@ export default function PaymentPage() {
                         No quotations found for this payment.
                       </p>
                     )}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
             ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 } 

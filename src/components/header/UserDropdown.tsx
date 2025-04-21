@@ -1,11 +1,9 @@
 "use client";
 import Image from "next/image";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { customToast } from "@/components/ui/toast";
 
 // Create a custom hook for profile data to ensure consistency
 export function useProfileData() {
@@ -14,121 +12,66 @@ export function useProfileData() {
     firstName: "",
     lastName: "",
     email: "",
-    fullName: ""  // Start with empty string instead of "User"
+    fullName: ""
   });
   
-  // Update profile data from Supabase on mount
-  useEffect(() => {
-    const fetchProfileFromSupabase = async () => {
-      if (!user) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-          
-        if (error) {
-          console.debug("Profile fetch result:", { error });
-          
-          // If no profile exists, create one
-          if (error.code === 'PGRST116' || error.message?.includes('no rows')) {
-            try {
-              const { data: newProfile, error: insertError } = await supabase
-                .from('profiles')
-                .insert([
-                  {
-                    id: user.id,
-                    email: user.email,
-                    first_name: user.user_metadata?.first_name || '',
-                    last_name: user.user_metadata?.last_name || '',
-                    updated_at: new Date().toISOString()
-                  }
-                ])
-                .select()
-                .single();
-
-              if (insertError) {
-                console.error("Error creating profile:", insertError);
-                return;
-              }
-
-              if (newProfile) {
-                const firstName = newProfile.first_name || "";
-                const lastName = newProfile.last_name || "";
-                const email = newProfile.email || user.email || "";
-                const fullName = generateFullName(firstName, lastName);
-                
-                setProfileData({
-                  firstName,
-                  lastName,
-                  email,
-                  fullName
-                });
-
-                // Store in localStorage
-                localStorage.setItem('profileData', JSON.stringify(newProfile));
-              }
-            } catch (insertErr) {
-              console.error("Exception creating profile:", insertErr);
-            }
-          }
-          return;
-        }
-        
-        if (data) {
-          console.debug("Profile data loaded:", data);
-          const firstName = data.first_name || "";
-          const lastName = data.last_name || "";
-          const email = data.email || user.email || "";
-          const fullName = generateFullName(firstName, lastName);
-          
-          setProfileData({
-            firstName,
-            lastName,
-            email,
-            fullName
-          });
-          
-          // Store in localStorage
-          localStorage.setItem('profileData', JSON.stringify(data));
-          
-          // Show profile incomplete notification if needed
-          if (!firstName && !lastName) {
-            setTimeout(() => {
-              customToast({
-                title: "Complete Your Profile",
-                description: "Please update your profile information.",
-              });
-            }, 2000);
-          }
-        }
-      } catch (err) {
-        console.error("Exception fetching profile:", err);
-      }
-    };
-    
-    // Initial data from auth context first
-    updateFromAuth();
-    
-    // Then check localStorage
-    updateFromLocalStorage();
-    
-    // Finally try to get latest from database
-    fetchProfileFromSupabase();
-    
-    // Set up listeners
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
-    };
+  const generateFullName = useCallback((first: string, last: string) => {
+    if (first && last) return `${first} ${last}`;
+    if (first) return first;
+    if (last) return last;
+    if (user?.email) return user.email.split('@')[0]; // Use email username if available
+    return "User"; // Last fallback
   }, [user]);
   
-  const updateFromAuth = () => {
+  const handleStorageChange = useCallback((e: StorageEvent) => {
+    if (e.key !== 'profileData' || !e.newValue) return;
+    
+    try {
+      const data = JSON.parse(e.newValue);
+      if (!data) return;
+      
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const email = data.email || profileData.email;
+      const fullName = generateFullName(firstName, lastName);
+      
+      setProfileData({
+        firstName,
+        lastName,
+        email,
+        fullName
+      });
+      
+      console.log("Profile updated from storage event", { firstName, lastName, fullName });
+    } catch (err) {
+      console.error("Error handling storage event", err);
+    }
+  }, [profileData.email, generateFullName]);
+  
+  const handleProfileUpdate = useCallback((e: CustomEvent) => {
+    try {
+      const data = e.detail;
+      if (!data) return;
+      
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const email = data.email || profileData.email;
+      const fullName = generateFullName(firstName, lastName);
+      
+      setProfileData({
+        firstName,
+        lastName,
+        email,
+        fullName
+      });
+      
+      console.log("Profile updated from custom event", { firstName, lastName, fullName });
+    } catch (err) {
+      console.error("Error handling custom event", err);
+    }
+  }, [profileData.email, generateFullName]);
+  
+  const updateFromAuth = useCallback(() => {
     if (!user) return;
     
     const firstName = user.user_metadata?.first_name || "";
@@ -142,9 +85,9 @@ export function useProfileData() {
       email,
       fullName
     });
-  };
+  }, [user, generateFullName]);
   
-  const updateFromLocalStorage = () => {
+  const updateFromLocalStorage = useCallback(() => {
     if (typeof window === 'undefined') return;
     
     try {
@@ -170,63 +113,22 @@ export function useProfileData() {
     } catch (err) {
       console.error("Error loading profile from localStorage", err);
     }
-  };
-  
-  const generateFullName = (first: string, last: string) => {
-    if (first && last) return `${first} ${last}`;
-    if (first) return first;
-    if (last) return last;
-    if (user?.email) return user.email.split('@')[0]; // Use email username if available
-    return "User"; // Last fallback
-  };
-  
-  const handleStorageChange = (e: StorageEvent) => {
-    if (e.key !== 'profileData' || !e.newValue) return;
+  }, [user, generateFullName]);
+
+  useEffect(() => {
+    // Effect for initializing profile data
+    updateFromAuth();
+    updateFromLocalStorage();
     
-    try {
-      const data = JSON.parse(e.newValue);
-      if (!data) return;
-      
-      const firstName = data.first_name || "";
-      const lastName = data.last_name || "";
-      const email = data.email || profileData.email;
-      const fullName = generateFullName(firstName, lastName);
-      
-      setProfileData({
-        firstName,
-        lastName,
-        email,
-        fullName
-      });
-      
-      console.log("Profile updated from storage event", { firstName, lastName, fullName });
-    } catch (err) {
-      console.error("Error handling storage event", err);
-    }
-  };
-  
-  const handleProfileUpdate = (e: CustomEvent) => {
-    try {
-      const data = e.detail;
-      if (!data) return;
-      
-      const firstName = data.first_name || "";
-      const lastName = data.last_name || "";
-      const email = data.email || profileData.email;
-      const fullName = generateFullName(firstName, lastName);
-      
-      setProfileData({
-        firstName,
-        lastName,
-        email,
-        fullName
-      });
-      
-      console.log("Profile updated from custom event", { firstName, lastName, fullName });
-    } catch (err) {
-      console.error("Error handling custom event", err);
-    }
-  };
+    // Add event listeners for updates
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileDataUpdated', handleProfileUpdate as EventListener);
+    };
+  }, [user, updateFromAuth, updateFromLocalStorage, handleStorageChange, handleProfileUpdate]);
   
   return profileData;
 }

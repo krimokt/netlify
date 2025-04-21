@@ -17,6 +17,7 @@ import QuotationDetailsModal from "@/components/quotation/QuotationDetailsModal"
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import CheckoutConfirmationModal from "@/components/quotation/CheckoutConfirmationModal";
+import MultiQuotationModal from "@/components/quotation/MultiQuotationModal";
 import { QuotationData, PriceOption } from "@/types/quotation";
 
 // Metrics interface
@@ -41,6 +42,8 @@ export default function QuotationPage() {
   });
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [selectedCheckoutQuotation, setSelectedCheckoutQuotation] = useState<QuotationData | null>(null);
+  const [isMultiQuotationModalOpen, setIsMultiQuotationModalOpen] = useState(false);
+  const [approvedQuotations, setApprovedQuotations] = useState<QuotationData[]>([]);
 
   // Get the current user from auth context
   const { user } = useAuth();
@@ -214,17 +217,21 @@ export default function QuotationPage() {
           console.log("Data formatted successfully:", formattedData.length);
           setQuotationData(formattedData);
           
+          // Store approved quotations for multi-payment
+          const approved = formattedData.filter(item => item.status === "Approved");
+          setApprovedQuotations(approved);
+          
           // Calculate metrics
           const total = quotationsData.length;
-          const approved = quotationsData.filter(item => item.status === "Approved").length;
+          const approvedCount = quotationsData.filter(item => item.status === "Approved").length;
           const pending = quotationsData.filter(item => item.status === "Pending").length;
           const rejected = quotationsData.filter(item => item.status === "Rejected").length;
           
-          console.log(`Metrics - Total: ${total}, Approved: ${approved}, Pending: ${pending}, Rejected: ${rejected}`);
+          console.log(`Metrics - Total: ${total}, Approved: ${approvedCount}, Pending: ${pending}, Rejected: ${rejected}`);
           
           setMetrics({
             total,
-            approved,
+            approved: approvedCount,
             pending,
             rejected
           });
@@ -268,13 +275,16 @@ export default function QuotationPage() {
     setIsCheckoutModalOpen(false);
   };
 
-  const handleCheckoutConfirm = (quotation: QuotationData) => {
-    window.location.href = `/checkoutpage?quotation=${quotation.quotation_id}`;
+  const openMultiQuotationModal = () => {
+    setIsMultiQuotationModalOpen(true);
   };
 
-  // Function to navigate to checkout page
-  const goToCheckout = () => {
-    window.location.href = `/checkoutpage`;
+  const closeMultiQuotationModal = () => {
+    setIsMultiQuotationModalOpen(false);
+  };
+
+  const handleCheckoutConfirm = (quotation: QuotationData) => {
+    window.location.href = `/checkoutpage?quotation=${quotation.quotation_id}`;
   };
 
   return (
@@ -291,9 +301,9 @@ export default function QuotationPage() {
                 variant="primary" 
                 size="sm" 
                 className="bg-green-600 hover:bg-green-700"
-                onClick={goToCheckout}
+                onClick={openMultiQuotationModal}
               >
-                Pay Multi Quotation
+                Pay Now
               </Button>
             )}
             <Button 
@@ -645,6 +655,11 @@ export default function QuotationPage() {
           quotation={selectedCheckoutQuotation}
         />
       )}
+      <MultiQuotationModal
+        isOpen={isMultiQuotationModalOpen}
+        onClose={closeMultiQuotationModal}
+        approvedQuotations={approvedQuotations}
+      />
     </div>
   );
 } 

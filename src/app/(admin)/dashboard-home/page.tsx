@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
  
   BoxIconLine, 
@@ -115,56 +115,7 @@ export default function DashboardHome() {
     }
   };
 
-  // Fetch real quotation data and metrics from Supabase
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        
-        // Get the user ID from auth context
-        const userId = user?.id;
-        
-        if (!userId) {
-          console.warn("No user ID available, showing no quotations");
-          setQuotationData([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Try to get data from cache first if not refreshing
-        if (!isRefreshing) {
-          const cachedData = getCachedData(userId);
-          if (cachedData) {
-            console.log('Using cached dashboard data');
-            setQuotationData(cachedData.quotationData);
-            setMetrics(cachedData.metrics);
-            setIsLoading(false);
-            return;
-          }
-        }
-        
-        // If no cache or refreshing, fetch fresh data
-        console.log(`Fetching dashboard data for user_id: ${userId}...`);
-        await fetchDashboardData(userId);
-        
-      } catch (error) {
-        console.error("Exception in loadData:", error);
-        setIsLoading(false);
-      }
-      
-      // Reset refreshing flag
-      setIsRefreshing(false);
-    }
-    
-    loadData();
-  }, [isModalOpen, user?.id, isRefreshing]);
-  
-  const handleRefreshData = () => {
-    setIsLoading(true);
-    setIsRefreshing(true);
-  };
-
-  async function fetchDashboardData(userId: string) {
+  const fetchDashboardData = useCallback(async (userId: string) => {
     try {
       // Fetch quotations for the table
       const { data, error } = await supabase
@@ -328,7 +279,55 @@ export default function DashboardHome() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        
+        // Get the user ID from auth context
+        const userId = user?.id;
+        
+        if (!userId) {
+          console.warn("No user ID available, showing no quotations");
+          setQuotationData([]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Try to get data from cache first if not refreshing
+        if (!isRefreshing) {
+          const cachedData = getCachedData(userId);
+          if (cachedData) {
+            console.log('Using cached dashboard data');
+            setQuotationData(cachedData.quotationData);
+            setMetrics(cachedData.metrics);
+            setIsLoading(false);
+            return;
+          }
+        }
+        
+        // If no cache or refreshing, fetch fresh data
+        console.log(`Fetching dashboard data for user_id: ${userId}...`);
+        await fetchDashboardData(userId);
+        
+      } catch (error) {
+        console.error("Exception in loadData:", error);
+        setIsLoading(false);
+      }
+      
+      // Reset refreshing flag
+      setIsRefreshing(false);
+    }
+    
+    loadData();
+  }, [isModalOpen, user?.id, isRefreshing, fetchDashboardData]);
+  
+  const handleRefreshData = () => {
+    setIsLoading(true);
+    setIsRefreshing(true);
+  };
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);

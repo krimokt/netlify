@@ -428,7 +428,7 @@ function CheckoutPageContent() {
       })
     }
     checkAuth()
-  }, [supabase, user])
+  }, [user])
 
   const handleBankSelection = (bank: string) => {
     setSelectedBank(bank)
