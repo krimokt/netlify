@@ -27,6 +27,7 @@
     "@tailwindcss/postcss": "^4.0.9",
     "apexcharts": "^4.3.0",
     "autoprefixer": "^10.4.20",
+    "clsx": "^2.1.1",
     "country-flag-icons": "^1.5.9",
     "date-fns": "^4.1.0",
     "flatpickr": "^4.6.13",
