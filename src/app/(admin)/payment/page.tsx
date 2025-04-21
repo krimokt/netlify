@@ -61,6 +61,7 @@ export default function PaymentPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const fetchAllQuotationDetails = useCallback(async (paymentsData: PaymentInfo[]) => {
     const quotationMap: Record<string, QuotationInfo[]> = {};
@@ -73,26 +74,53 @@ export default function PaymentPage() {
       const quotationToPaymentMap: Record<string, string> = {};
       
       // First get all relevant quotation IDs
-        for (const payment of paymentsData) {
-        if (payment.quotations.length > 0) {
-          // Already has quotation IDs
-          payment.quotations.forEach(qId => {
+      for (const payment of paymentsData) {
+        if (payment.quotations && payment.quotations.length > 0) {
+          // Filter out null or invalid UUIDs
+          const validQuotations = payment.quotations.filter(qId => {
+            // Check if the ID is a valid string and matches UUID format
+            const isValidUUID = typeof qId === 'string' && 
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(qId);
+            if (!isValidUUID) {
+              console.warn(`Invalid quotation ID found: ${qId}`);
+            }
+            return isValidUUID;
+          });
+
+          // Add valid quotations to our tracking
+          validQuotations.forEach(qId => {
             allQuotationIds.push(qId);
             quotationToPaymentMap[qId] = payment.id;
           });
         } else {
           // Try to get from junction table - could optimize this in the future
-          const { data: junctionData } = await supabase
-              .from('payment_quotations')
+          const { data: junctionData, error: junctionError } = await supabase
+            .from('payment_quotations')
             .select('quotation_id')
-              .eq('payment_id', payment.id);
+            .eq('payment_id', payment.id);
             
-            if (junctionData && junctionData.length > 0) {
-            const ids = junctionData.map(item => item.quotation_id);
-            // Update the payment with quotation IDs
-            payment.quotations = ids;
+          if (junctionError) {
+            console.error("Error fetching junction data:", junctionError);
+            continue;
+          }
             
-            ids.forEach(qId => {
+          if (junctionData && junctionData.length > 0) {
+            // Filter out null or invalid UUIDs from junction data
+            const validIds = junctionData
+              .map(item => item.quotation_id)
+              .filter(qId => {
+                const isValidUUID = typeof qId === 'string' && 
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(qId);
+                if (!isValidUUID) {
+                  console.warn(`Invalid quotation ID found in junction table: ${qId}`);
+                }
+                return isValidUUID;
+              });
+
+            // Update the payment with valid quotation IDs
+            payment.quotations = validIds;
+            
+            validIds.forEach(qId => {
               allQuotationIds.push(qId);
               quotationToPaymentMap[qId] = payment.id;
             });
@@ -100,22 +128,28 @@ export default function PaymentPage() {
         }
       }
       
-      // If no quotation IDs found, return empty map
+      // If no valid quotation IDs found, return empty map
       if (allQuotationIds.length === 0) {
+        console.log("No valid quotation IDs found in payments");
         return quotationMap;
       }
       
-      // Fetch all quotations in a single query - much more efficient!
-      const { data: allQuotations, error: quotationsError } = await supabase
-                  .from('quotations')
-                  .select('*')
-        .in('id', allQuotationIds);
+      // Remove any duplicate IDs
+      const uniqueQuotationIds = [...new Set(allQuotationIds)];
+      console.log(`Fetching ${uniqueQuotationIds.length} unique quotations`);
       
+      // Fetch all quotations in a single query
+      const { data: allQuotations, error: quotationsError } = await supabase
+        .from('quotations')
+        .select('*')
+        .in('id', uniqueQuotationIds);
+        
       if (quotationsError) {
         console.error("Error fetching quotations:", quotationsError);
+        console.error("Error details:", JSON.stringify(quotationsError, null, 2));
         return quotationMap;
       }
-      
+        
       if (!allQuotations || allQuotations.length === 0) {
         console.log("No quotations found for the provided IDs");
         return quotationMap;
@@ -124,7 +158,10 @@ export default function PaymentPage() {
       // Process all quotations and organize them by payment ID
       allQuotations.forEach(q => {
         const paymentId = quotationToPaymentMap[q.id];
-        if (!paymentId) return; // Skip if no payment ID mapping found
+        if (!paymentId) {
+          console.warn(`No payment ID mapping found for quotation ${q.id}`);
+          return;
+        }
         
         // Initialize array for this payment if needed
         if (!quotationMap[paymentId]) {
@@ -132,16 +169,15 @@ export default function PaymentPage() {
         }
         
         // Process image URL - simplified logic
-              let imageUrl = "/images/product/product-01.jpg";
-              let hasImage = false;
+        let imageUrl = "/images/product/product-01.jpg";
+        let hasImage = false;
               
-              if (q.image_url) {
-                imageUrl = q.image_url;
-                hasImage = true;
-              }
-        else if (q.product_images && q.product_images.length > 0 && q.product_images[0]) {
+        if (q.image_url) {
+          imageUrl = q.image_url;
+          hasImage = true;
+        } else if (q.product_images && q.product_images.length > 0 && q.product_images[0]) {
           imageUrl = q.product_images[0];
-                      hasImage = true;
+          hasImage = true;
           
           // Make sure image URL is fully qualified
           if (!imageUrl.includes('://') && !imageUrl.startsWith('/')) {
@@ -151,64 +187,67 @@ export default function PaymentPage() {
         
         // Create formatted quotation object
         const formattedQuotation: QuotationInfo = {
-                id: q.quotation_id || `QT-${q.id}`,
-                uuid: q.id,
-                product_name: q.product_name,
-                quantity: q.quantity,
-                status: q.status,
-                created_at: new Date(q.created_at).toLocaleDateString(),
-                product_images: q.product_images || [],
-                hasImage,
-                imageUrl
-              };
+          id: q.quotation_id || `QT-${q.id}`,
+          uuid: q.id,
+          product_name: q.product_name || 'Unnamed Product',
+          quantity: q.quantity || '0',
+          status: q.status || 'Pending',
+          created_at: new Date(q.created_at).toLocaleDateString(),
+          product_images: q.product_images || [],
+          hasImage,
+          imageUrl
+        };
         
         // Add to the map
         quotationMap[paymentId].push(formattedQuotation);
       });
       
-      // Return the complete map
       return quotationMap;
       
     } catch (error) {
       console.error("Error processing quotation details:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
       return quotationMap;
     }
   }, []);
 
   const fetchPayments = useCallback(async (userId: string) => {
-    try {
-      // Fetch payments from Supabase using updated column names
-      const { data, error } = await supabase
-        .from('payments')
-        .select(`
-          id,
-          total_amount,
-          status,
-          created_at,
-          method,
+      try {
+        // Fetch payments from Supabase using updated column names
+        const { data, error } = await supabase
+          .from('payments')
+          .select(`
+            id,
+            total_amount,
+            status,
+            created_at,
+            method,
         proof_url,
         quotation_ids
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        throw error;
-      }
+        if (error) {
+          throw error;
+        }
 
-      // Format the payment data with the new column names
-      const formattedPayments = data.map((payment: Record<string, unknown>) => ({
-        id: payment.id as string,
-        amount: payment.total_amount as number,
-        status: payment.status as "pending" | "processing" | "completed" | "failed",
-        date: new Date((payment.created_at as string)).toLocaleDateString(),
+        // Format the payment data with the new column names
+        const formattedPayments = data.map((payment: Record<string, unknown>) => ({
+          id: payment.id as string,
+          amount: payment.total_amount as number,
+          status: payment.status as "pending" | "processing" | "completed" | "failed",
+          date: new Date((payment.created_at as string)).toLocaleDateString(),
       quotations: (payment.quotation_ids as string[] || []), // Use quotation_ids directly if available
-        paymentMethod: payment.method as string,
-        proofUrl: payment.proof_url as string | undefined
-      }));
+          paymentMethod: payment.method as string,
+          proofUrl: payment.proof_url as string | undefined
+        }));
 
-      setPayments(formattedPayments);
-      
+        setPayments(formattedPayments);
+        
     // Fetch all quotation details at once
     const quotationMap = await fetchAllQuotationDetails(formattedPayments);
     
@@ -219,20 +258,20 @@ export default function PaymentPage() {
       timestamp: Date.now()
     });
     
-    } catch (error: unknown) {
-      const supabaseError = error as SupabaseError;
-      setError(supabaseError.message);
-    } finally {
-      setIsLoading(false);
-    }
+      } catch (error: unknown) {
+        const supabaseError = error as SupabaseError;
+        setError(supabaseError.message);
+      } finally {
+        setIsLoading(false);
+      }
   }, [fetchAllQuotationDetails]);
 
   useEffect(() => {
     const loadData = async () => {
-      try {
+          try {
         // First check authentication
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
+            
         if (authError) {
           throw authError;
         }
@@ -240,8 +279,8 @@ export default function PaymentPage() {
         if (!user) {
           router.push('/login');
           return;
-        }
-        
+            }
+            
         // Try to get data from cache first
         const cachedData = getCachedData(user.id);
         
@@ -252,8 +291,8 @@ export default function PaymentPage() {
           setQuotationsMap(cachedData.quotationsMap);
           setIsLoading(false);
           return;
-        }
-        
+            }
+            
         // Fetch fresh data from database
         await fetchPayments(user.id);
         
@@ -281,7 +320,7 @@ export default function PaymentPage() {
       // Check if cache is still valid (not expired)
       if (now - cachedData.timestamp < CACHE_EXPIRY) {
         return cachedData;
-      }
+                    } 
       
       // Clear expired cache
       localStorage.removeItem(`${CACHE_KEY}_${userId}`);
@@ -289,7 +328,7 @@ export default function PaymentPage() {
     } catch (error) {
       console.error('Error reading from cache:', error);
         return null;
-      }
+                  }
     };
 
   // Function to save data to cache
@@ -302,8 +341,8 @@ export default function PaymentPage() {
     } catch (error) {
       console.error('Error saving to cache:', error);
       // If caching fails, just continue without caching
-    }
-  };
+      }
+    };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -339,7 +378,13 @@ export default function PaymentPage() {
     }
   };
 
-  const handleFileChange = () => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setSelectedFile(files[0]);
+    } else {
+      setSelectedFile(null);
+    }
     setUploadSuccess(false);
     setUploadError(null);
   };
@@ -351,21 +396,19 @@ export default function PaymentPage() {
       setUploadError("Payment ID is missing.");
       return;
     }
-    
-    const files = fileInputRef.current?.files;
-    if (!files || files.length === 0) {
+
+    if (!selectedFile) {
       setUploadError("Please select a file to upload.");
       return;
     }
     
-    const file = files[0];
     // Basic validation for file type and size
-    if (!file.type.includes('image/') && !file.type.includes('application/pdf')) {
-      setUploadError("Please upload an image or PDF file.");
+    if (!selectedFile.type.includes('image/') && !selectedFile.type.includes('application/pdf')) {
+      setUploadError("Please upload an image (JPG, PNG) or PDF file.");
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+    if (selectedFile.size > 5 * 1024 * 1024) { // 5MB limit
       setUploadError("File size should be less than 5MB.");
       return;
     }
@@ -374,77 +417,79 @@ export default function PaymentPage() {
     setUploadError(null);
     
     try {
-      // Generate a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `payment-proof-${currentPaymentId}-${Date.now()}.${fileExt}`;
+      // First check if user is authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
       
-      // Important: Don't include a path prefix, just use the filename
-      const filePath = fileName;
-      
-      console.log("Uploading file:", fileName, "to bucket: payment_proofs");
-      
-      // Upload to Supabase Storage with correct bucket ID
-      const uploadResult = await supabase.storage
-        .from('payment_proofs')
-        .upload(filePath, file, {
-          upsert: true
-        });
-        
-      if (uploadResult.error) {
-        console.error("Upload error:", uploadResult.error);
-        
-        // Check if this is an RLS policy violation
-        if (uploadResult.error.message && uploadResult.error.message.includes("new row violates row-level security policy")) {
-          throw new Error(`Upload failed due to security policy. Please make sure you're logged in and have permission to upload files. 
-          Technical details: ${uploadResult.error.message}`);
-        }
-        
-        throw new Error(`Upload failed: ${uploadResult.error.message}`);
+      if (authError || !user) {
+        throw new Error("You must be logged in to upload files.");
       }
+
+      // Generate a unique filename with user ID
+      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase() || '';
+      const fileName = `${user.id}-payment-${currentPaymentId}-${Date.now()}.${fileExt}`;
       
-      console.log("File uploaded successfully");
+      console.log("Starting file upload process...");
+      console.log("File details:", {
+        name: selectedFile.name,
+        type: selectedFile.type,
+        size: `${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`
+      });
       
-      // Get public URL 
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('payment_proofs')
+        .upload(fileName, selectedFile, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: selectedFile.type
+        });
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      if (!uploadData) {
+        throw new Error("Upload failed: No response from server");
+      }
+
+      console.log("File uploaded successfully, getting public URL...");
+      
+      // Get public URL
       const { data: urlData } = supabase.storage
         .from('payment_proofs')
-        .getPublicUrl(filePath);
-        
+        .getPublicUrl(fileName);
+
       if (!urlData || !urlData.publicUrl) {
-        throw new Error("Failed to generate public URL");
+        throw new Error("Failed to generate public URL for uploaded file");
       }
-        
+
       const publicUrl = urlData.publicUrl;
-      console.log("Generated public URL:", publicUrl);
+      console.log("Public URL generated:", publicUrl);
       
       // Update payment record with proof URL
-      console.log("Updating payment record with ID:", currentPaymentId);
-      console.log("Setting proof_url and payment_proof to:", publicUrl);
-      
       const { data: updateData, error: updateError } = await supabase
         .from('payments')
         .update({
           proof_url: publicUrl,
-          payment_proof: publicUrl, // Update both proof columns
-          status: 'processing' // Change status from pending to processing
+          payment_proof: publicUrl,
+          status: 'processing'
         })
         .eq('id', currentPaymentId)
         .select();
-        
+
       if (updateError) {
         console.error("Database update error:", updateError);
         throw new Error(`Failed to update payment record: ${updateError.message}`);
       }
-      
+
       if (!updateData || updateData.length === 0) {
-        console.error("No payment record was updated. Possible reasons:");
-        console.error("- Payment ID might not exist:", currentPaymentId);
-        console.error("- User might not have permission to update this record");
         throw new Error("Failed to update payment record: No record was updated");
       }
+
+      console.log("Payment record updated successfully");
       
-      console.log("Payment record updated successfully:", updateData);
-      
-      // Update local state for the modified payment
+      // Update local state
       setPayments(prevPayments => 
         prevPayments.map(payment => 
           payment.id === currentPaymentId 
@@ -456,46 +501,148 @@ export default function PaymentPage() {
             : payment
         )
       );
-      
-      // Also update cache after successful upload
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const cachedData = getCachedData(user.id);
-        if (cachedData) {
-          cachedData.payments = cachedData.payments.map(payment => 
-            payment.id === currentPaymentId 
-              ? { 
-                  ...payment, 
-                  status: 'processing',
-                  proofUrl: publicUrl
-                } 
-              : payment
-          );
-          saveToCache(user.id, cachedData);
-        }
+
+      // Update cache
+      const cachedData = getCachedData(user.id);
+      if (cachedData) {
+        cachedData.payments = cachedData.payments.map(payment => 
+          payment.id === currentPaymentId 
+            ? { 
+                ...payment, 
+                status: 'processing',
+                proofUrl: publicUrl
+              } 
+            : payment
+        );
+        saveToCache(user.id, cachedData);
       }
-      
+
       setUploadSuccess(true);
       
-      // Reset state after short delay
+      // Reset state after success
       setTimeout(() => {
-        // Reset state and file input after successful upload
         setCurrentPaymentId(null);
         setUploadSuccess(false);
         setUploadError(null);
-        // Reset file input
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
       }, 2000);
-      
-    } catch (error: unknown) {
+
+    } catch (error) {
       console.error("Error in upload process:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to upload payment proof.";
       setUploadError(errorMessage);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const renderFileUpload = (payment: PaymentInfo) => {
+    if (currentPaymentId !== payment.id) {
+      return (
+        <div className="flex flex-col">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            {payment.proofUrl 
+              ? "You've already uploaded proof for this payment."
+              : "No payment proof has been uploaded yet."}
+          </p>
+          <Button
+            onClick={() => handleUploadProof(payment.id)} 
+            variant={payment.proofUrl ? "outline" : "primary"}
+            size="sm"
+            className={payment.proofUrl 
+              ? "w-fit mt-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+              : "w-fit mt-1 bg-[#1E88E5] hover:bg-[#0D47A1]"}
+          >
+            {payment.proofUrl ? "Replace Proof" : "Upload Proof"}
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          {payment.proofUrl 
+            ? "Replace with a new payment proof:"
+            : "Please upload a screenshot or photo of your payment receipt:"}
+        </p>
+        
+        <div className="space-y-4">
+          <div className="relative">
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                aria-label="Upload payment proof"
+              />
+              <div className="flex flex-col items-center">
+                <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Click to select file or drag and drop
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Accepted formats: JPG, PNG, PDF (max 5MB)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {selectedFile ? (
+                <span>
+                  Selected: <span className="font-medium">{selectedFile.name}</span>
+                </span>
+              ) : (
+                <span>No file selected</span>
+              )}
+            </div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isUploading || !selectedFile}
+              className={
+                isUploading || !selectedFile
+                  ? "bg-blue-400 cursor-not-allowed opacity-50"
+                  : "bg-[#1E88E5] hover:bg-[#0D47A1]"
+              }
+            >
+              {isUploading ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                  Uploading...
+                </>
+              ) : (
+                "Upload Proof"
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {uploadError && (
+          <div className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {uploadError}
+          </div>
+        )}
+
+        {uploadSuccess && (
+          <div className="mt-4 text-sm text-green-600 dark:text-green-400 flex items-center">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Upload successful!
+          </div>
+        )}
+      </form>
+    );
   };
 
   const toggleExpandPayment = (paymentId: string) => {
@@ -711,11 +858,11 @@ export default function PaymentPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm text-gray-500">Payment ID:</span>
                       <span className="font-medium">{payment.id}</span>
-                    </div>
+          </div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm text-gray-500">Date:</span>
                       <span>{payment.date}</span>
-                    </div>
+          </div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm text-gray-500">Method:</span>
                       <span className="capitalize">{payment.paymentMethod.toLowerCase().replace('_', ' ')}</span>
@@ -772,167 +919,7 @@ export default function PaymentPage() {
                         Payment Proof
                     </h4>
                     
-                      {payment.proofUrl ? (
-                        <div className="flex flex-col md:flex-row gap-4 items-start">
-                          <div className="mt-2 md:mt-0">
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                              You&apos;ve already uploaded proof for this payment.
-                            </p>
-                            
-                            {currentPaymentId === payment.id && (
-                              <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                  Replace with a new payment proof (JPG, PNG, or PDF up to 5MB):
-                                </p>
-                                
-                                <div className="flex flex-wrap gap-3 items-center">
-                                  <div>
-                                    <input
-                                      type="file"
-                                      accept="image/jpeg,image/png,application/pdf"
-                                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                      ref={fileInputRef}
-                                      onChange={handleFileChange}
-                                    />
-                                  </div>
-                                  
-                                  {fileInputRef.current?.files?.[0] && (
-                                    <Button
-                                      type="submit"
-                                      variant="primary"
-                                      size="sm"
-                                      disabled={isUploading}
-                                      className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
-                                    >
-                                      {isUploading ? (
-                                        <>
-                                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                                          Uploading...
-                                        </>
-                                      ) : (
-                                        "Upload"
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                                
-                                {uploadError && (
-                                  <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                                    {uploadError}
-                                  </div>
-                                )}
-                                
-                                {uploadSuccess && (
-                                  <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    Upload successful!
-                                  </div>
-                                )}
-                              </form>
-                            )}
-                            
-                            {currentPaymentId !== payment.id && (
-                              <Button
-                                onClick={() => handleUploadProof(payment.id)} 
-                                variant="outline"
-                                size="sm"
-                                className="mt-1 border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                              >
-                                Replace Proof
-                              </Button>
-                            )}
-                  </div>
-              </div>
-            ) : (
-                        <div>
-                          {currentPaymentId === payment.id ? (
-              <form onSubmit={handleUploadSubmit}>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                Please upload a screenshot or photo of your payment receipt.
-                                Accepted formats: JPG, PNG, PDF (max 5MB).
-                              </p>
-                              
-                              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 mb-3 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <input
-                      type="file"
-                        accept="image/jpeg,image/png,application/pdf"
-                        className="hidden"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full h-full flex flex-col items-center justify-center"
-                      >
-                                  <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Click to select file or drag and drop
-                        </span>
-                      </button>
-                </div>
-                    
-                    {fileInputRef.current?.files?.[0] && (
-                                <div className="flex items-center justify-between mt-2 mb-3">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          Selected: <span className="font-medium">{fileInputRef.current.files[0].name}</span>
-                        </span>
-                                  
-              <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="sm"
-                    disabled={isUploading}
-                                    className={isUploading ? "bg-blue-400 cursor-not-allowed" : "bg-[#1E88E5] hover:bg-[#0D47A1]"}
-                  >
-                    {isUploading ? (
-                      <>
-                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                        Uploading...
-                      </>
-                      ) : (
-                        "Upload Proof"
-                      )}
-                </Button>
-                </div>
-              )}
-                              
-                              {uploadError && (
-                                <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                                  {uploadError}
-            </div>
-                              )}
-                              
-                              {uploadSuccess && (
-                                <div className="mt-2 text-sm text-green-600 dark:text-green-400 flex items-center">
-                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  Upload successful!
-          </div>
-                              )}
-                            </form>
-                          ) : (
-                            <div className="flex flex-col">
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                                No payment proof has been uploaded yet.
-                              </p>
-                              <Button
-                                onClick={() => handleUploadProof(payment.id)} 
-                                variant="primary"
-                                size="sm"
-                                className="w-fit mt-1 bg-[#1E88E5] hover:bg-[#0D47A1]"
-                              >
-                                Upload Proof
-                              </Button>
-        </div>
-      )}
-                        </div>
-                      )}
+                      {renderFileUpload(payment)}
                     </div>
                   
                     {quotationsMap[payment.id]?.length > 0 ? (
@@ -955,8 +942,8 @@ export default function PaymentPage() {
                                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
+                </svg>
+            </div>
                               )}
                             </div>
                             <div className="flex-grow">
@@ -971,7 +958,7 @@ export default function PaymentPage() {
                           </div>
                         ))}
                       </div>
-                    ) : (
+              ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         
                       </p>

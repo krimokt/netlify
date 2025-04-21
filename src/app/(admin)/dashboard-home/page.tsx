@@ -84,7 +84,7 @@ export default function DashboardHome() {
       
       const cachedData = JSON.parse(cachedDataString) as CacheData;
       const now = Date.now();
-      
+        
       // Check if cache is still valid (not expired) and belongs to the current user
       if (now - cachedData.timestamp < CACHE_EXPIRY && cachedData.userId === userId) {
         return cachedData;
@@ -117,73 +117,73 @@ export default function DashboardHome() {
 
   const fetchDashboardData = useCallback(async (userId: string) => {
     try {
-      // Fetch quotations for the table
-      const { data, error } = await supabase
-        .from('quotations')
-        .select(`
-          id,
-          quotation_id,
-          product_name,
-          quantity,
-          created_at,
-          status,
-          image_url,
-          total_price_option1,
-          total_price_option2,
-          total_price_option3
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(3);
-        
-      if (error) {
-        console.error("Error fetching quotations:", error);
-        console.error("Error details:", JSON.stringify(error, null, 2));
-        setIsLoading(false);
-        return;
-      }
-      
-      if (!data) {
-        console.warn("No quotation data returned");
-        setQuotationData([]);
-        setIsLoading(false);
-        return;
-      }
-      
-      console.log("Quotations data retrieved:", data.length);
-      
-      // Transform data to match the format expected by the component
-      try {
-        const formattedData = data.map(item => {
-          // Calculate price from options
-          let price;
-          const priceOptions = [
-            item.total_price_option1,
-            item.total_price_option2,
-            item.total_price_option3
-          ].filter(Boolean);
+        // Fetch quotations for the table
+        const { data, error } = await supabase
+          .from('quotations')
+          .select(`
+            id,
+            quotation_id,
+            product_name,
+            quantity,
+            created_at,
+            status,
+            image_url,
+            total_price_option1,
+            total_price_option2,
+            total_price_option3
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(3);
           
-          if (priceOptions.length > 0) {
-            const average = priceOptions.reduce((sum, price) => 
-              sum + parseFloat(price), 0) / priceOptions.length;
-            price = `$${average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-          }
-          
-          return {
-            id: item.quotation_id || item.id,
-            product: {
-              name: item.product_name,
-              image: item.image_url || "/images/product/product-01.jpg"
-            },
-            quantity: item.quantity,
-            date: new Date(item.created_at).toLocaleDateString(),
-            status: item.status || 'Pending',
-            hasImage: !!item.image_url,
-            price: price
-          };
-        });
+        if (error) {
+          console.error("Error fetching quotations:", error);
+          console.error("Error details:", JSON.stringify(error, null, 2));
+          setIsLoading(false);
+          return;
+        }
         
-        setQuotationData(formattedData);
+        if (!data) {
+          console.warn("No quotation data returned");
+          setQuotationData([]);
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log("Quotations data retrieved:", data.length);
+        
+        // Transform data to match the format expected by the component
+        try {
+          const formattedData = data.map(item => {
+            // Calculate price from options
+            let price;
+            const priceOptions = [
+              item.total_price_option1,
+              item.total_price_option2,
+              item.total_price_option3
+            ].filter(Boolean);
+            
+            if (priceOptions.length > 0) {
+              const average = priceOptions.reduce((sum, price) => 
+                sum + parseFloat(price), 0) / priceOptions.length;
+              price = `$${average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+            
+            return {
+              id: item.quotation_id || item.id,
+              product: {
+                name: item.product_name,
+                image: item.image_url || "/images/product/product-01.jpg"
+              },
+              quantity: item.quantity,
+              date: new Date(item.created_at).toLocaleDateString(),
+              status: item.status || 'Pending',
+              hasImage: !!item.image_url,
+              price: price
+            };
+          });
+          
+          setQuotationData(formattedData);
         
         // Create a new metrics object to track all the metrics
         const newMetrics: DashboardMetrics = {
@@ -193,71 +193,71 @@ export default function DashboardHome() {
           totalSpend: 0
         };
         
-        // Fetch pending quotations count
-        console.log(`Fetching pending quotations count for user_id: ${userId}...`);
-        const { count: pendingCount, error: pendingError } = await supabase
-          .from('quotations')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'Pending')
-          .eq('user_id', userId);
-          
-        if (pendingError) {
-          console.error("Error fetching pending quotations:", pendingError);
-        } else if (pendingCount !== null) {
-          console.log("Pending quotations count:", pendingCount);
+          // Fetch pending quotations count
+          console.log(`Fetching pending quotations count for user_id: ${userId}...`);
+          const { count: pendingCount, error: pendingError } = await supabase
+            .from('quotations')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'Pending')
+            .eq('user_id', userId);
+            
+          if (pendingError) {
+            console.error("Error fetching pending quotations:", pendingError);
+          } else if (pendingCount !== null) {
+            console.log("Pending quotations count:", pendingCount);
           newMetrics.pendingQuotations = pendingCount;
         }
 
-        // Fetch count of active shipments (shipments that are not delivered)
-        console.log(`Fetching active shipments count for user_id: ${userId}...`);
-        const { count: activeShipmentsCount, error: activeShipmentsError } = await supabase
-          .from('shipping')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .not('status', 'eq', 'Delivered');
+            // Fetch count of active shipments (shipments that are not delivered)
+            console.log(`Fetching active shipments count for user_id: ${userId}...`);
+            const { count: activeShipmentsCount, error: activeShipmentsError } = await supabase
+              .from('shipping')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .not('status', 'eq', 'Delivered');
 
-        if (activeShipmentsError) {
-          console.error("Error fetching active shipments:", activeShipmentsError);
-        } else if (activeShipmentsCount !== null) {
-          console.log("Active shipments count:", activeShipmentsCount);
+            if (activeShipmentsError) {
+              console.error("Error fetching active shipments:", activeShipmentsError);
+            } else if (activeShipmentsCount !== null) {
+              console.log("Active shipments count:", activeShipmentsCount);
           newMetrics.activeShipments = activeShipmentsCount;
-        }
-
-        // Fetch count of delivered products
-        console.log(`Fetching delivered products count for user_id: ${userId}...`);
-        const { count: deliveredCount, error: deliveredError } = await supabase
-          .from('shipping')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('status', 'Delivered');
-
-        if (deliveredError) {
-          console.error("Error fetching delivered products:", deliveredError);
-        } else if (deliveredCount !== null) {
-          console.log("Delivered products count:", deliveredCount);
-          newMetrics.deliveredProducts = deliveredCount;
-        }
-
-        // Calculate total spend from approved payments
-        console.log(`Fetching approved payments for total spend calculation for user_id: ${userId}...`);
-        const { data: approvedPayments, error: paymentsError } = await supabase
-          .from('payments')
-          .select('total_amount')
-          .eq('user_id', userId)
-          .eq('status', 'Approved');
-
-        if (paymentsError) {
-          console.error("Error fetching approved payments:", paymentsError);
-        } else if (approvedPayments) {
-          console.log("Approved payments:", approvedPayments.length);
-          const totalSpend = approvedPayments.reduce((sum, payment) => {
-            // Add the payment total_amount to the running sum
-            if (payment.total_amount) {
-              return sum + parseFloat(payment.total_amount);
             }
-            return sum;
-          }, 0);
-          
+
+            // Fetch count of delivered products
+            console.log(`Fetching delivered products count for user_id: ${userId}...`);
+            const { count: deliveredCount, error: deliveredError } = await supabase
+              .from('shipping')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .eq('status', 'Delivered');
+
+            if (deliveredError) {
+              console.error("Error fetching delivered products:", deliveredError);
+            } else if (deliveredCount !== null) {
+              console.log("Delivered products count:", deliveredCount);
+          newMetrics.deliveredProducts = deliveredCount;
+            }
+
+            // Calculate total spend from approved payments
+            console.log(`Fetching approved payments for total spend calculation for user_id: ${userId}...`);
+            const { data: approvedPayments, error: paymentsError } = await supabase
+              .from('payments')
+              .select('total_amount')
+              .eq('user_id', userId)
+              .eq('status', 'Approved');
+
+            if (paymentsError) {
+              console.error("Error fetching approved payments:", paymentsError);
+            } else if (approvedPayments) {
+              console.log("Approved payments:", approvedPayments.length);
+              const totalSpend = approvedPayments.reduce((sum, payment) => {
+                // Add the payment total_amount to the running sum
+                if (payment.total_amount) {
+                  return sum + parseFloat(payment.total_amount);
+                }
+                return sum;
+              }, 0);
+              
           newMetrics.totalSpend = totalSpend;
         }
         

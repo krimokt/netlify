@@ -194,8 +194,10 @@ export default function QuotationPage() {
             }
             
             return {
-              id: item.quotation_id || item.id,
-              quotation_id: item.quotation_id || `QT-${item.id}`,
+              // Keep the actual UUID as id
+              id: item.id,
+              // Use quotation_id for display, or generate one from UUID if not available
+              quotation_id: item.quotation_id || `QT-${item.id.split('-')[0]}`,
               product: {
                 name: item.product_name || "Unnamed Product",
                 image: item.image_url || "/images/product/product-01.jpg",
@@ -283,8 +285,40 @@ export default function QuotationPage() {
     setIsMultiQuotationModalOpen(false);
   };
 
-  const handleCheckoutConfirm = (quotation: QuotationData) => {
-    window.location.href = `/checkoutpage?quotation=${quotation.quotation_id}`;
+  const handleCheckoutConfirm = (selectedQuotations: QuotationData[], paymentMethod: string) => {
+    try {
+      if (!selectedQuotations || selectedQuotations.length === 0) {
+        throw new Error("No quotations selected");
+      }
+
+      if (!paymentMethod) {
+        throw new Error("No payment method selected");
+      }
+
+      // If there's only one quotation, use single quotation flow
+      if (selectedQuotations.length === 1) {
+        const quotationId = selectedQuotations[0].quotation_id || selectedQuotations[0].id;
+        const url = `/payment`;
+        window.location.href = url;
+        return;
+      }
+      
+      // For multiple quotations, create a comma-separated list of quotation IDs
+      const quotationIds = selectedQuotations
+        .map(q => q.quotation_id || q.id)
+        .filter(Boolean)
+        .join(',');
+
+      if (!quotationIds) {
+        throw new Error("Invalid quotation IDs");
+      }
+
+      const url = `/payment`;
+      window.location.href = url;
+    } catch (error) {
+      console.error('Error processing checkout:', error);
+      alert('There was an error processing your request. Please try again.');
+    }
   };
 
   return (
@@ -651,14 +685,15 @@ export default function QuotationPage() {
         <CheckoutConfirmationModal
           isOpen={isCheckoutModalOpen}
           onClose={closeCheckoutModal}
-          onConfirm={() => handleCheckoutConfirm(selectedCheckoutQuotation)}
+          onConfirm={() => handleCheckoutConfirm([selectedCheckoutQuotation], '')}
           quotation={selectedCheckoutQuotation}
         />
       )}
       <MultiQuotationModal
         isOpen={isMultiQuotationModalOpen}
         onClose={closeMultiQuotationModal}
-        approvedQuotations={approvedQuotations}
+        quotations={approvedQuotations}
+        onProceedToPayment={(selectedQuotations, paymentMethod) => handleCheckoutConfirm(selectedQuotations, paymentMethod)}
       />
     </div>
   );

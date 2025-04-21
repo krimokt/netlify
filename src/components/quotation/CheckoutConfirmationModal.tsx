@@ -258,6 +258,10 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
         
         // User confirmed, continue with creating a new payment
         console.log("User confirmed to create another payment despite existing one.");
+        // Redirect to payment page after successful creation
+        setTimeout(() => {
+          window.location.href = '/payment';
+        }, 1500);
       }
 
       // Extract price value

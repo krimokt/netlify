@@ -122,7 +122,7 @@ export default function ShipmentTrackingPage() {
         const quotationIds = userShipments
           .map(item => item.quotation_id)
           .filter((id): id is string => id !== null && id !== undefined);
-          
+        
         // If there are no valid quotation IDs, we can skip fetching quotations
         if (quotationIds.length === 0) {
           // Map shipping items without quotation data

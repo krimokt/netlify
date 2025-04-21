@@ -13,8 +13,8 @@ const clientRoutes = [
   '/order',
   '/payment',
   '/shipment-tracking',
-  '/payment-example',
-  '/checkoutpage'
+  
+  
 ];
 
 // Admin-only routes (redirect clients away from these)

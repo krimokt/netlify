@@ -2,7 +2,7 @@ export interface PriceOption {
   id: string;
   price: string;
   supplier: string;
-  deliveryTime: string;
+  deliveryTime?: string;
   description?: string;
   modelName?: string;
   modelImage?: string;
@@ -17,15 +17,22 @@ export interface QuotationProduct {
 }
 
 export interface QuotationData {
+  // The actual UUID from the database
   id: string;
+  // The display ID (e.g., QT-1234567890)
   quotation_id: string;
-  product: QuotationProduct;
+  product: {
+    name: string;
+    image: string;
+    category?: string;
+    description?: string;
+  };
   quantity: string;
   date: string;
   status: string;
   price?: string;
-  shippingMethod: string;
-  destination: string;
+  shippingMethod?: string;
+  destination?: string;
   priceOptions?: PriceOption[];
   hasImage?: boolean;
   selected_option?: number;
