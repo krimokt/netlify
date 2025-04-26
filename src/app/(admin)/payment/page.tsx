@@ -31,7 +31,7 @@ interface QuotationInfo {
 
 // Cache configuration
 const CACHE_KEY = 'payment_data_cache';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_EXPIRY = 30 * 1000; // 30 seconds in milliseconds (reduced from 5 minutes)
 
 // Define types for error to avoid using 'any'
 interface SupabaseError {
@@ -266,6 +266,29 @@ export default function PaymentPage() {
       }
   }, [fetchAllQuotationDetails]);
 
+  // Define handleRefreshData with useCallback for better performance
+  const handleRefreshData = useCallback(() => {
+    // Clear all caches before reloading
+    try {
+      // Clear all payment caches for all users
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith(CACHE_KEY)) {
+          localStorage.removeItem(key);
+          console.log(`Cleared cache for key: ${key}`);
+        }
+      });
+    } catch (err) {
+      console.error('Error clearing cache:', err);
+    }
+    
+    // Force a complete page reload
+    window.location.reload();
+    
+    // The following code will only run if the reload fails
+    setIsLoading(true);
+    setIsRefreshing(true);
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
           try {
@@ -283,15 +306,18 @@ export default function PaymentPage() {
             
         // Try to get data from cache first
         const cachedData = getCachedData(user.id);
+        const isPageRefresh = performance && 'navigation' in performance 
+          ? performance.navigation.type === 1 
+          : false;
         
-        if (cachedData && !isRefreshing) {
+        if (cachedData && !isRefreshing && !isPageRefresh) {
           // Use cached data if available and not explicitly refreshing
           console.log('Using cached payment data');
           setPayments(cachedData.payments);
           setQuotationsMap(cachedData.quotationsMap);
           setIsLoading(false);
           return;
-            }
+        }
             
         // Fetch fresh data from database
         await fetchPayments(user.id);
@@ -307,6 +333,49 @@ export default function PaymentPage() {
     // Reset refreshing flag after data load
     setIsRefreshing(false);
   }, [router, isRefreshing, fetchPayments]);
+
+  // Simple auto-refresh after redirect - checks URL for refresh parameter
+  useEffect(() => {
+    // Check URL for refresh parameter
+    try {
+      const url = new URL(window.location.href);
+      const needsRefresh = url.searchParams.get('refresh') === 'true';
+      
+      if (needsRefresh) {
+        console.log('Auto-refresh detected - will refresh once in 5 seconds');
+        
+        // Remove the refresh parameter from URL
+        url.searchParams.delete('refresh');
+        window.history.replaceState({}, document.title, url.toString());
+        
+        // Set a timeout to refresh after 5 seconds
+        const refreshTimer = setTimeout(() => {
+          console.log('Performing auto-refresh after 5 seconds');
+          
+          // Clear caches before refresh
+          try {
+            // Clear all payment caches
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith(CACHE_KEY)) {
+                localStorage.removeItem(key);
+                console.log(`Auto-refresh: Cleared cache for key: ${key}`);
+              }
+            });
+          } catch (err) {
+            console.error('Error clearing cache during auto-refresh:', err);
+          }
+          
+          // Force a full page reload
+          window.location.reload();
+        }, 5000);
+        
+        // Clean up the timer if component unmounts
+        return () => clearTimeout(refreshTimer);
+      }
+    } catch (error) {
+      console.error('Error setting up auto-refresh:', error);
+    }
+  }, []);
 
   // Function to get cached data if valid
   const getCachedData = (userId: string): CacheData | null => {
@@ -347,21 +416,16 @@ export default function PaymentPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'success';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
       case 'processing':
-        return 'warning';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
       case 'pending':
-        return 'primary';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
       case 'failed':
-        return 'error';
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
       default:
-        return 'light';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
-  };
-
-  const handleRefreshData = () => {
-    setIsLoading(true);
-    setIsRefreshing(true);
   };
 
   const handleUploadProof = (paymentId: string) => {
@@ -659,7 +723,9 @@ export default function PaymentPage() {
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-t-4 border-t-blue-500 border-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading payment history...</p>
+          <p className="text-gray-600">
+            {isRefreshing ? "Refreshing payment data..." : "Loading payment history..."}
+          </p>
         </div>
       </div>
     );
@@ -691,13 +757,19 @@ export default function PaymentPage() {
           <Button 
             variant="outline" 
             size="sm"
-            className="text-[#1E88E5] border-[#1E88E5] hover:bg-blue-50"
+            className={`
+              ${isRefreshing 
+                ? "text-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
+                : "text-[#1E88E5] border-[#1E88E5] hover:bg-blue-50"
+              }
+              transition-all duration-300
+            `}
             onClick={handleRefreshData}
             disabled={isRefreshing}
           >
             {isRefreshing ? (
               <>
-                <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
                 Refreshing...
               </>
             ) : (
@@ -711,20 +783,20 @@ export default function PaymentPage() {
           </Button>
       </div>
 
-      {/* Bank Accounts Section - updated for white bg in dark mode */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-        <div className="p-5 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-800">
+      {/* Bank Accounts Section - updated for dark mode */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
             Bank Account Details
           </h2>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Please use one of the following bank accounts for your payments
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
           {/* Wise Bank */}
-          <div className="border border-gray-200 rounded-lg p-4 bg-white">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800/60">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -734,12 +806,12 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800">Wise Bank</h3>
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Wise Bank</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => navigator.clipboard.writeText("BE24 9052 0546 8538")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -748,7 +820,7 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm text-gray-800">
+            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-300">
               <p><span className="font-medium">Name:</span> Amaadour Ltd</p>
               <p><span className="font-medium">IBAN:</span> BE24 9052 0546 8538</p>
               <p><span className="font-medium">Swift/BIC:</span> TRWIBEB1XXX</p>
@@ -757,7 +829,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Société Générale */}
-          <div className="border border-gray-200 rounded-lg p-4 bg-white">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800/60">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -767,13 +839,13 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800">Société Générale</h3>
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">Société Générale</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                onClick={() => navigator.clipboard.writeText("022 780 000359002837327 74")}
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => navigator.clipboard.writeText("022 780 0003 5900 2837 3727 74")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -781,20 +853,17 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm text-gray-800">
+            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-300">
               <p><span className="font-medium">Name:</span> AMAADOUR MEHDI</p>
+              <p><span className="font-medium">Account Number:</span> 0003 5900 2837 3727</p>
+              <p><span className="font-medium">RIB Number:</span> 022 780 0003 5900 2837 3727 74</p>
               <p><span className="font-medium">Code SWIFT:</span> SGMBMAMC</p>
-              <p><span className="font-medium">Agency:</span> AL QODS OULAD TALEB</p>
-              <p><span className="font-medium">Bank Code:</span> 022</p>
-              <p><span className="font-medium">Agency Code:</span> 780</p>
-              <p><span className="font-medium">Account Number:</span> 000359002837327</p>
-              <p><span className="font-medium">RIB Key:</span> 74</p>
               <p><span className="font-medium">Currency:</span> MAD</p>
             </div>
           </div>
 
           {/* CIH Bank */}
-          <div className="border border-gray-200 rounded-lg p-4 bg-white">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800/60">
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
@@ -804,13 +873,13 @@ export default function PaymentPage() {
                   height={60} 
                   className="mr-3"
                 />
-                <h3 className="text-lg font-medium text-gray-800">CIH Bank</h3>
+                <h3 className="text-lg font-medium text-gray-800 dark:text-white">CIH Bank</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                onClick={() => navigator.clipboard.writeText("MA64 2307 0141 7105 5211 0312 0150")}
+                className="border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => navigator.clipboard.writeText("MA64 2307 9141 7105 3211 0312 0139")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -818,15 +887,13 @@ export default function PaymentPage() {
                 Copy
               </Button>
             </div>
-            <div className="space-y-2 text-sm text-gray-800">
-              <p><span className="font-medium">Name:</span> MEHDI AMAADOUR</p>
-              <p><span className="font-medium">Agency:</span> BOUSKOURA VILLE VERTE</p>
-              <p><span className="font-medium">IBAN:</span> MA64 2307 0141 7105 5211 0312 0150</p>
-              <p><span className="font-medium">BIC/SWIFT:</span> CIHAMAMC</p>
-              <p><span className="font-medium">Bank Code:</span> 230</p>
-              <p><span className="font-medium">City Code:</span> 791</p>
-              <p><span className="font-medium">Account Number:</span> 4171063211031201</p>
-              <p><span className="font-medium">RIB Key:</span> 39</p>
+            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-300">
+              <p><span className="font-medium">Name:</span> AMAADOUR MEHDI</p>
+              <p><span className="font-medium">Account Number:</span> 4171 0532 1103 1201</p>
+              <p><span className="font-medium">RIB Number:</span> 230 791 4171 0532 1103 1201 39</p>
+              <p><span className="font-medium">IBAN:</span> MA64 2307 9141 7105 3211 0312 0139</p>
+              <p><span className="font-medium">Code SWIFT:</span> CIHMMAMC</p>
+              <p><span className="font-medium">Currency:</span> MAD</p>
             </div>
           </div>
         </div>
@@ -856,26 +923,26 @@ export default function PaymentPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-gray-500">Payment ID:</span>
-                      <span className="font-medium">{payment.id}</span>
-          </div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Payment ID:</span>
+                      <span className="font-medium text-gray-800 dark:text-white">{payment.id}</span>
+                    </div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-gray-500">Date:</span>
-                      <span>{payment.date}</span>
-          </div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Date:</span>
+                      <span className="text-gray-700 dark:text-gray-300">{payment.date}</span>
+                    </div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-gray-500">Method:</span>
-                      <span className="capitalize">{payment.paymentMethod.toLowerCase().replace('_', ' ')}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Method:</span>
+                      <span className="capitalize text-gray-700 dark:text-gray-300">{payment.paymentMethod.toLowerCase().replace('_', ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500">Status:</span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(payment.status)}`}>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
+                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
                         {payment.status}
                       </span>
                     </div>
                     {payment.quotations && payment.quotations.length > 0 && (
                       <div className="mt-2">
-                        <span className="text-sm text-gray-500">Quotation IDs:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Quotation IDs:</span>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {payment.quotations.map((qId) => (
                             <span key={qId} className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded-full">

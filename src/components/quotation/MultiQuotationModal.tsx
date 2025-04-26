@@ -188,8 +188,8 @@ const MultiQuotationModal: React.FC<MultiQuotationModalProps> = ({
         .from('payments')
         .insert([{
           user_id: user.id,
-          total_amount: totalAmount.toString(),
-          method: selectedMethod.name,
+          amount: parseFloat(totalAmount.toString()),
+          payment_method: selectedMethod.id,
           status: 'pending',
           quotation_ids: quotationUuids,
           reference_number: referenceNumber,
@@ -198,14 +198,39 @@ const MultiQuotationModal: React.FC<MultiQuotationModalProps> = ({
         .select()
         .single();
 
+      console.log("Attempting to save payment with data:", {
+        user_id: user.id,
+        amount: parseFloat(totalAmount.toString()),
+        payment_method: selectedMethod.id,
+        status: 'pending',
+        quotation_ids: quotationUuids,
+        reference_number: referenceNumber
+      });
+
       if (paymentError) {
-        console.error("Payment Error:", paymentError);
+        console.error("Payment Error Details:", {
+          message: paymentError.message,
+          details: paymentError.details,
+          hint: paymentError.hint,
+          code: paymentError.code
+        });
         throw new Error("Failed to create payment record. Please try again.");
       }
 
       if (!payment) {
         throw new Error("Failed to create payment record");
       }
+
+      console.log("Payment data:", {
+        user_id: user.id,
+        amount: parseFloat(totalAmount.toString()),
+        payment_method: selectedMethod.id,
+        status: 'pending',
+        quotation_ids: quotationUuids,
+        reference_number: referenceNumber
+      });
+      
+      console.log("Payment response:", payment);
 
       // Update quotations with payment reference
       const updatePromises = selectedQuotations.map(quotation => {
@@ -235,8 +260,12 @@ const MultiQuotationModal: React.FC<MultiQuotationModalProps> = ({
       // Close the modal
       onClose();
     } catch (error) {
-      console.error("Error processing payment:", error);
-      alert(error instanceof Error ? error.message : "There was an error processing your request. Please try again.");
+      console.error("Payment processing error:", error);
+      // Display error message to user
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      alert(`Failed to process payment: ${errorMessage}`);
+      // Or use a toast notification if available
+      // toast.error(`Failed to process payment: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }

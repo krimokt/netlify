@@ -86,15 +86,39 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
     setCountries(countryList);
   }, []);
   
+  // Update search query when destination country changes
+  useEffect(() => {
+    if (formData.destinationCountry) {
+      const selectedCountry = countries.find(c => c.code === formData.destinationCountry);
+      if (selectedCountry) {
+        setSearchQuery(selectedCountry.name);
+      }
+    }
+  }, [formData.destinationCountry, countries]);
+  
   // Filter countries based on search query
   const filteredCountries = useMemo(() => {
+    // If search query is empty, return all countries
     if (!searchQuery.trim()) return countries;
     
+    // If the search query exactly matches the selected country name,
+    // we want to still show other countries with similar names
+    const selectedCountry = countries.find(c => c.code === formData.destinationCountry);
+    if (selectedCountry && searchQuery === selectedCountry.name) {
+      // Return the selected country first, followed by other countries that partially match
+      const otherMatches = countries.filter(country => 
+        country.code !== formData.destinationCountry && 
+        country.name.toLowerCase().includes(searchQuery.toLowerCase().substring(0, 3))
+      );
+      return [selectedCountry, ...otherMatches];
+    }
+    
+    // Regular filtering
     return countries.filter(country => 
       country.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
       country.code.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [countries, searchQuery]);
+  }, [countries, searchQuery, formData.destinationCountry]);
   
   // Function to determine region based on country code
   // This is a simplified version, in a real app you'd use a more accurate mapping
@@ -529,13 +553,44 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
                   Destination Country *
                 </label>
                 <div className="mb-4">
-                  <input
-                    type="text"
-                    placeholder="Search countries..."
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] dark:bg-gray-700 dark:border-gray-600 dark:text-white mb-2"
-                  />
+                  <div className="relative">
+                    <div className="flex items-center">
+                      {formData.destinationCountry && (
+                        <span className="absolute left-2 text-xl">
+                          {countries.find(c => c.code === formData.destinationCountry)?.emoji}
+                        </span>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="Search countries..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] dark:bg-gray-700 dark:border-gray-600 dark:text-white mb-2 ${
+                          formData.destinationCountry ? 'pl-10' : ''
+                        }`}
+                      />
+                    </div>
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          if (formData.destinationCountry) {
+                            setFormData({
+                              ...formData,
+                              destinationCountry: "",
+                              shippingMethod: ""
+                            });
+                          }
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   
                   <div className="h-[200px] overflow-y-auto border border-gray-300 rounded-md">
                     {filteredCountries.map((country) => (
@@ -547,7 +602,7 @@ const QuotationFormModal: React.FC<QuotationFormModalProps> = ({ isOpen, onClose
                             destinationCountry: country.code,
                             shippingMethod: ""
                           });
-                          setSearchQuery("");
+                          setSearchQuery(country.name);
                         }}
                         className={`flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
                           formData.destinationCountry === country.code

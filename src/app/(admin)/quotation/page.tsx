@@ -326,7 +326,7 @@ export default function QuotationPage() {
       {/* Page Header Section */}
       <div className="col-span-12">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-white/90">
+          <h1 className="text-2xl font-bold text-[#0D47A1] dark:text-blue-400">
             Quotation Management
           </h1>
           <div className="flex flex-wrap items-center gap-3">
@@ -334,7 +334,7 @@ export default function QuotationPage() {
               <Button 
                 variant="primary" 
                 size="sm" 
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
                 onClick={openMultiQuotationModal}
               >
                 Pay Now
@@ -343,7 +343,7 @@ export default function QuotationPage() {
             <Button 
               variant="primary" 
               size="sm" 
-              className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+              className="bg-[#1E88E5] hover:bg-[#0D47A1] dark:bg-blue-600 dark:hover:bg-blue-700"
               onClick={openModal}
             >
               Create New Quote
@@ -356,9 +356,9 @@ export default function QuotationPage() {
       <div className="col-span-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
           {/* Total Quotes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <svg className="text-[#0D47A1] dark:text-blue-400" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M7 7H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M7 12H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -369,16 +369,16 @@ export default function QuotationPage() {
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Total Quotes
               </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-blue-400">
                 {metrics.total}
               </h4>
             </div>
           </div>
 
           {/* Approved Quotes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <svg className="text-[#0D47A1] dark:text-blue-400" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 11L12 14L22 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M21 12V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -387,16 +387,16 @@ export default function QuotationPage() {
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Approved Quotes
               </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-blue-400">
                 {metrics.approved}
               </h4>
             </div>
           </div>
 
           {/* Pending Quotes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <svg className="text-[#0D47A1] dark:text-blue-400" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M12 18V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M4.93 4.93L7.76 7.76" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -411,16 +411,16 @@ export default function QuotationPage() {
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Pending Quotes
               </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-blue-400">
                 {metrics.pending}
               </h4>
             </div>
           </div>
 
           {/* Rejected Quotes */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <svg className="text-[#0D47A1]" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <svg className="text-[#0D47A1] dark:text-blue-400" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -429,7 +429,7 @@ export default function QuotationPage() {
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 Rejected Quotes
               </span>
-              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+              <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-blue-400">
                 {metrics.rejected}
               </h4>
             </div>
@@ -439,9 +439,9 @@ export default function QuotationPage() {
 
       {/* Quotation Table Section */}
       <div className="col-span-12">
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800/80">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
+            <h3 className="font-semibold text-[#0D47A1] dark:text-blue-400 text-base">
               Recent Quotations
             </h3>
             <div className="flex flex-wrap items-center gap-3">
@@ -449,10 +449,10 @@ export default function QuotationPage() {
                 <input
                   type="text"
                   placeholder="Search quotations..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] w-64 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:border-[#1E88E5] w-64 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-blue-500 dark:focus:border-blue-500"
                 />
                 <svg
-                  className="absolute left-3 top-2.5 text-gray-400"
+                  className="absolute left-3 top-2.5 text-gray-400 dark:text-gray-500"
                   width="16"
                   height="16"
                   viewBox="0 0 24 24"
@@ -482,7 +482,7 @@ export default function QuotationPage() {
             <div className="min-w-full">
               <Table>
                 {/* Table Header */}
-                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                <TableHeader className="border-b border-gray-100 dark:border-gray-700">
                   <TableRow>
                     <TableCell
                       isHeader
@@ -530,10 +530,10 @@ export default function QuotationPage() {
                 </TableHeader>
 
                 {/* Table Body */}
-                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {isLoading && (
                     <TableRow>
-                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                      <TableCell className="px-5 py-4 text-gray-500 dark:text-gray-400 text-center">
                         <div className="w-full text-center">Loading quotations...</div>
                       </TableCell>
                       <TableCell>{""}</TableCell>
@@ -547,7 +547,7 @@ export default function QuotationPage() {
                   
                   {!isLoading && quotationData.length === 0 && (
                     <TableRow>
-                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                      <TableCell className="px-5 py-4 text-gray-500 dark:text-gray-400 text-center">
                         <div className="w-full text-center">No quotations found</div>
                       </TableCell>
                       <TableCell>{""}</TableCell>
@@ -562,7 +562,7 @@ export default function QuotationPage() {
                   {!isLoading && quotationData.map((item) => (
                     <TableRow 
                       key={item.id}
-                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                      className="transition-all duration-300 hover:bg-[#E3F2FD] dark:hover:bg-blue-900/20 hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
                     >
                       <TableCell className="px-5 py-4">
                         <span className="text-gray-700 text-sm dark:text-gray-300">
@@ -622,6 +622,7 @@ export default function QuotationPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                             onClick={() => openDetailsModal(item)}
                           >
                             Details
@@ -630,7 +631,7 @@ export default function QuotationPage() {
                             <Button
                               variant="primary"
                               size="sm"
-                              className="bg-green-600 hover:bg-green-700"
+                              className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
                               onClick={() => openCheckoutModal(item)}
                             >
                               Pay Now
@@ -646,24 +647,24 @@ export default function QuotationPage() {
           </div>
           
           {/* Pagination */}
-          <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-white/[0.05]">
+          <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-gray-700">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               Showing 1-{quotationData.length} of {metrics.total} items
             </div>
             <div className="flex gap-1">
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-700 dark:hover:bg-white/[0.05]" disabled>
+              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:text-gray-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-400" disabled>
                 Previous
               </button>
-              <button className="px-3 py-1 text-sm rounded-md bg-[#1E88E5] text-white">
+              <button className="px-3 py-1 text-sm rounded-md bg-[#1E88E5] text-white dark:bg-blue-600">
                 1
               </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
+              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-600 dark:text-gray-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-400">
                 2
               </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
+              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-600 dark:text-gray-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-400">
                 3
               </button>
-              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-700 dark:hover:bg-white/[0.05]">
+              <button className="px-3 py-1 text-sm rounded-md border border-gray-300 text-gray-500 hover:bg-[#E3F2FD] hover:text-[#1E88E5] dark:border-gray-600 dark:text-gray-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-400">
                 Next
               </button>
             </div>

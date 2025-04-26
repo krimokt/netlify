@@ -471,164 +471,180 @@ export default function ShipmentTrackingPage() {
       <Modal 
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
-        className="max-w-3xl p-8 mx-4 md:mx-auto"
+        className="max-w-3xl mx-4 md:mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-xl relative overflow-hidden"
       >
         {selectedShipment && selectedShipment.quotation && (
-          <>
-            <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Shipment Details</h2>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white">Shipment Details</h2>
                 <p className="text-gray-600 dark:text-gray-400">
                   Tracking Number: {selectedShipment.quotation.quotation_id || "N/A"}
                 </p>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <div className="relative h-48 w-full overflow-hidden rounded-lg mb-4">
-                  <Image
-                    src={selectedShipment.quotation.image_url || defaultProductImage}
-                    alt={selectedShipment.quotation.product_name || "Product"}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <h3 className="text-lg font-semibold">{selectedShipment.quotation.product_name || "Product"}</h3>
-                <p className="text-gray-500">Order ID: {selectedShipment.quotation.quotation_id || "N/A"}</p>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="border-b pb-2">
-                  <p className="text-sm text-gray-500">Status</p>
-                  <div className="mt-1">
-                    <Badge color={getStatusBadgeColor(selectedShipment.status)} size="sm">
-                      {selectedShipment.status || "Not Available"}
-                    </Badge>
+            <div className="overflow-y-auto max-h-[calc(100vh-150px)] p-5 md:p-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <div className="relative h-48 w-full overflow-hidden rounded-lg mb-4 border border-gray-200 dark:border-gray-700">
+                    <Image
+                      src={selectedShipment.quotation.image_url || defaultProductImage}
+                      alt={selectedShipment.quotation.product_name || "Product"}
+                      fill
+                      className="object-cover"
+                    />
                   </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{selectedShipment.quotation.product_name || "Product"}</h3>
+                  <p className="text-gray-500 dark:text-gray-400">Order ID: {selectedShipment.quotation.quotation_id || "N/A"}</p>
                 </div>
                 
-                <div className="border-b pb-2">
-                  <p className="text-sm text-gray-500">Dates</p>
-                  <p className="text-sm">
-                    <span className="font-medium">Created:</span> {formatDate(selectedShipment.created_at)}
-                  </p>
-                  {selectedShipment.status?.toLowerCase() === "delivered" ? (
-                    <p className="text-sm">
-                      <span className="font-medium">Delivered:</span> {formatDate(selectedShipment.delivered_at)}
+                <div className="space-y-4">
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-3">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
+                    <div className="mt-1">
+                      <Badge color={getStatusBadgeColor(selectedShipment.status)} size="sm">
+                        {selectedShipment.status || "Not Available"}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-3">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Dates</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">Created:</span> {formatDate(selectedShipment.created_at)}
                     </p>
-                  ) : (
-                    <p className="text-sm">
-                      <span className="font-medium">Estimated Delivery:</span> {formatDate(selectedShipment.estimated_delivery)}
-                    </p>
-                  )}
+                    {selectedShipment.status?.toLowerCase() === "delivered" ? (
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Delivered:</span> {formatDate(selectedShipment.delivered_at)}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">Estimated Delivery:</span> {formatDate(selectedShipment.estimated_delivery)}
+                      </p>
+                    )}
+                  </div>
                 </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-sm">
+                  <div className="text-gray-500 dark:text-gray-400 text-sm mb-1">Origin</div>
+                  <div className="font-medium text-blue-600 dark:text-blue-400">China</div>
+                  <div className="text-gray-700 dark:text-gray-300">Shipping Port</div>
+                </div>
+                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-sm">
+                  <div className="text-gray-500 dark:text-gray-400 text-sm mb-1">Current Location</div>
+                  <div className="font-medium text-amber-600 dark:text-amber-400">{selectedShipment.location || "Not updated"}</div>
+                  <div className="text-gray-700 dark:text-gray-300">{selectedShipment.location ? "In Transit" : "Waiting for update"}</div>
+                </div>
+                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-sm">
+                  <div className="text-gray-500 dark:text-gray-400 text-sm mb-1">Destination</div>
+                  <div className="font-medium text-green-600 dark:text-green-400">{selectedShipment.quotation.shipping_country || "Not specified"}</div>
+                  <div className="text-gray-700 dark:text-gray-300">{selectedShipment.quotation.shipping_city || "Not specified"}</div>
+                </div>
+              </div>
+
+              {/* Receiver Information Section */}
+              {selectedShipment.receiver_name && (
+                <div className="mt-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                  <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Receiver Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Name</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Phone Number</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_phone}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Address</p>
+                      <p className="font-medium text-gray-900 dark:text-white whitespace-pre-line">{selectedShipment.receiver_address}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Image Gallery Section - Show if images are available */}
+              {selectedShipment.images_urls && selectedShipment.images_urls.length > 0 ? (
+                <div className="mt-6">
+                  <h3 className="mb-3 text-lg font-medium text-gray-800 dark:text-white">Shipment Images</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {selectedShipment.images_urls.map((url, idx) => {
+                      // Ensure URL is valid before rendering Image component
+                      const isValid = isValidUrl(url);
+                      const imageUrl = isValid ? validateImageUrl(url) : imagePlaceholder;
+                      
+                      return (
+                        <div key={idx} className="relative h-32 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                          <Image
+                            src={imageUrl}
+                            alt={`Shipment image ${idx + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <h3 className="mb-3 text-lg font-medium text-gray-800 dark:text-white">Shipment Images</h3>
+                  <div className="text-center text-gray-500 dark:text-gray-400 py-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
+                    No images available
+                  </div>
+                </div>
+              )}
+
+              {/* Video Gallery Section - Show if videos are available */}
+              {selectedShipment.videos_urls && selectedShipment.videos_urls.length > 0 ? (
+                <div className="mt-6">
+                  <h3 className="mb-3 text-lg font-medium text-gray-800 dark:text-white">Shipment Videos</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedShipment.videos_urls.map((url, idx) => {
+                      // Ensure URL is valid before rendering video component
+                      const isValid = isValidUrl(url);
+                      const videoUrl = isValid ? validateImageUrl(url) : "";
+                      
+                      if (!isValid) return null;
+                      
+                      return (
+                        <div key={idx} className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+                          <video 
+                            controls
+                            className="w-full h-auto"
+                            preload="metadata"
+                          >
+                            <source src={videoUrl} type="video/mp4" />
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <h3 className="mb-3 text-lg font-medium text-gray-800 dark:text-white">Shipment Videos</h3>
+                  <div className="text-center text-gray-500 dark:text-gray-400 py-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
+                    No videos available
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-6 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDetailsModal(false)}
+                  className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Close
+                </Button>
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Origin</div>
-                <div className="font-medium text-[#0D47A1]">China</div>
-                <div className="text-gray-700">Shipping Port</div>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Current Location</div>
-                <div className="font-medium text-[#ffb300]">{selectedShipment.location || "Not updated"}</div>
-                <div className="text-gray-700">{selectedShipment.location ? "In Transit" : "Waiting for update"}</div>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-md">
-                <div className="text-gray-500 text-sm mb-1">Destination</div>
-                <div className="font-medium text-[#43a047]">{selectedShipment.quotation.shipping_country || "Not specified"}</div>
-                <div className="text-gray-700">{selectedShipment.quotation.shipping_city || "Not specified"}</div>
-              </div>
-            </div>
-
-            {/* Receiver Information Section */}
-            {selectedShipment.receiver_name && (
-              <div className="mt-6 p-4 border border-gray-100 rounded-lg">
-                <h3 className="text-lg font-medium mb-4">Receiver Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Name</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Phone Number</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedShipment.receiver_phone}</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Address</p>
-                    <p className="font-medium text-gray-900 dark:text-white whitespace-pre-line">{selectedShipment.receiver_address}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Image Gallery Section - Show if images are available */}
-            {selectedShipment.images_urls && selectedShipment.images_urls.length > 0 ? (
-              <div className="mt-6">
-                <h3 className="mb-3 text-lg font-medium">Shipment Images</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {selectedShipment.images_urls.map((url, idx) => {
-                    // Ensure URL is valid before rendering Image component
-                    const isValid = isValidUrl(url);
-                    const imageUrl = isValid ? validateImageUrl(url) : imagePlaceholder;
-                    
-                    return (
-                      <div key={idx} className="relative h-32 rounded-lg overflow-hidden">
-                        <Image
-                          src={imageUrl}
-                          alt={`Shipment image ${idx + 1}`}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6">
-                <h3 className="mb-3 text-lg font-medium">Shipment Images</h3>
-                <div className="text-center text-gray-500 py-4">No images available</div>
-              </div>
-            )}
-
-            {/* Video Gallery Section - Show if videos are available */}
-            {selectedShipment.videos_urls && selectedShipment.videos_urls.length > 0 ? (
-              <div className="mt-6">
-                <h3 className="mb-3 text-lg font-medium">Shipment Videos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {selectedShipment.videos_urls.map((url, idx) => {
-                    // Ensure URL is valid before rendering video component
-                    const isValid = isValidUrl(url);
-                    const videoUrl = isValid ? validateImageUrl(url) : "";
-                    
-                    if (!isValid) return null;
-                    
-                    return (
-                      <div key={idx} className="rounded-lg overflow-hidden">
-                        <video 
-                          controls
-                          className="w-full h-auto"
-                          preload="metadata"
-                        >
-                          <source src={videoUrl} type="video/mp4" />
-                          Your browser does not support the video tag.
-                        </video>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6">
-                <h3 className="mb-3 text-lg font-medium">Shipment Videos</h3>
-                <div className="text-center text-gray-500 py-4">No videos available</div>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </Modal>
 

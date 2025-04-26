@@ -408,15 +408,15 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} showCloseButton={false} className="max-w-4xl h-auto mx-auto p-4 sm:p-6 overflow-hidden">
+    <Modal isOpen={isOpen} onClose={onClose} showCloseButton={false} className="max-w-4xl h-auto mx-auto p-4 sm:p-6 overflow-hidden bg-white dark:bg-gray-800">
       {/* Modal header */}
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
         <div>
-          <h2 className="text-xl font-bold text-[#0D47A1] dark:text-white">
+          <h2 className="text-xl font-bold text-[#0D47A1] dark:text-blue-400">
             Quotation {quotation.id}
           </h2>
           <div className="flex items-center mt-1">
-            <span className="text-sm text-gray-500 mr-3">Created on {quotation.date}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mr-3">Created on {quotation.date}</span>
             <Badge
               size="sm"
               color={
@@ -433,9 +433,24 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
         </div>
         <button 
           onClick={onClose}
-          className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+          className="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          aria-label="Close modal"
         >
-          <CloseIcon className="w-6 h-6" />
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="20" 
+            height="20" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="w-5 h-5"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
         </button>
       </div>
 
@@ -529,7 +544,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
               variant="primary"
               disabled={!selectedOption || isSaving}
               onClick={handleAcceptQuote}
-              className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+              className="bg-[#1E88E5] hover:bg-[#0D47A1] dark:bg-blue-600 dark:hover:bg-blue-700"
             >
               {isSaving ? 'Saving...' : 'Accept Quotation'}
             </Button>
@@ -541,8 +556,8 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                   onClick={handleSaveSelection}
                   disabled={isSaving}
                   className={selectedOption !== String(quotation.selected_option) 
-                    ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300" 
-                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"}
+                    ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700 dark:hover:bg-yellow-900/50" 
+                    : "bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"}
                 >
                   {isSaving 
                     ? 'Saving...' 
@@ -555,7 +570,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                 variant="primary"
                 disabled={(!selectedOption && !savedOption) || isSaving}
                 onClick={handlePayNow}
-                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+                className="bg-[#1E88E5] hover:bg-[#0D47A1] dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 Pay Now
               </Button>
@@ -571,6 +586,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <button 
               onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
               className="bg-white/10 p-2 rounded-full hover:bg-white/20"
+              aria-label="Zoom in"
             >
               {/* Plus Icon */}
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -580,6 +596,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <button 
               onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
               className="bg-white/10 p-2 rounded-full hover:bg-white/20"
+              aria-label="Zoom out"
             >
               {/* Minus Icon */}
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -589,6 +606,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <button 
               onClick={() => setZoomImage(null)}
               className="bg-white/10 p-2 rounded-full hover:bg-white/20"
+              aria-label="Close"
             >
               <CloseIcon className="w-6 h-6 text-white" />
             </button>
@@ -619,7 +637,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
               <h2 className="text-xl font-bold text-gray-800 dark:text-white">Payment Options</h2>
               <button 
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+                className="p-1 text-gray-400 rounded-full hover:bg-gray-100 hover:text-gray-600 dark:text-white dark:hover:bg-gray-700"
               >
                 <CloseIcon className="w-6 h-6" />
               </button>
@@ -634,29 +652,29 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
               <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
                 <ul className="flex flex-wrap -mb-px text-sm font-medium text-center">
                   <li className="mr-2">
-                    <button className="inline-block p-4 border-b-2 border-blue-500 rounded-t-lg text-blue-500">
+                    <button className="inline-block p-4 border-b-2 border-blue-500 rounded-t-lg text-blue-500 dark:text-blue-400 dark:border-blue-400">
                       Bank Transfer
                     </button>
                   </li>
                   <li className="mr-2">
-                    <button className="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300">
+                    <button className="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600">
                       Credit Card
                     </button>
                   </li>
                 </ul>
               </div>
 
-              <h3 className="font-medium mb-3 text-lg text-center">THE CLIENT MAKE PAYMENT THROUGHT</h3>
+              <h3 className="font-medium mb-3 text-lg text-center dark:text-white">THE CLIENT MAKE PAYMENT THROUGHT</h3>
               
               {/* Bank Options */}
               <div className="space-y-6">
                 {/* WISE BANK */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-hidden dark:border-gray-700">
                   <div className="bg-gray-50 dark:bg-gray-700 p-3 flex justify-between items-center cursor-pointer">
                     <div className="flex items-center">
-                      <div className="font-semibold">WISE BANK</div>
+                      <div className="font-semibold dark:text-white">WISE BANK</div>
                     </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 dark:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -664,10 +682,10 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Name</p>
-                        <p className="font-medium">Amadour Ltd</p>
+                        <p className="font-medium dark:text-white">Amadour Ltd</p>
                       </div>
                       <div>
-                        <button className="text-blue-500 ml-auto">
+                        <button className="text-blue-500 dark:text-blue-400 ml-auto">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
                             <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
@@ -678,35 +696,35 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                     <div className="grid grid-cols-2 gap-4 mt-3">
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">IBAN</p>
-                        <p className="font-medium flex items-center">
+                        <p className="font-medium flex items-center dark:text-white">
                           BE24 9052 0546 8538
-                          <button className="text-blue-500 ml-2">
+                          <button className="text-blue-500 dark:text-blue-400 ml-2">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
                               <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
                             </svg>
                           </button>
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">Can receive EUR and other currencies</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Can receive EUR and other currencies</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">SWIFT/BIC</p>
-                        <p className="font-medium flex items-center">
+                        <p className="font-medium flex items-center dark:text-white">
                           TRWIBEB1XXX
-                          <button className="text-blue-500 ml-2">
+                          <button className="text-blue-500 dark:text-blue-400 ml-2">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
                               <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
                             </svg>
                           </button>
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">Only used for international Swift transfers</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Only used for international Swift transfers</p>
                       </div>
                     </div>
                     <div className="mt-3">
                       <p className="text-sm text-gray-500 dark:text-gray-400">Bank name and address</p>
-                      <p className="font-medium">Wise, Rue du Trône 100, 3rd floor,</p>
-                      <p className="font-medium">Brussels, 1050, Belgium</p>
+                      <p className="font-medium dark:text-white">Wise, Rue du Trône 100, 3rd floor,</p>
+                      <p className="font-medium dark:text-white">Brussels, 1050, Belgium</p>
                     </div>
                   </div>
                 </div>
@@ -857,7 +875,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
             <div className="mt-6 flex justify-end gap-3">
               <button 
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               >
                 Close
               </button>
@@ -867,7 +885,7 @@ const QuotationDetailsModal: React.FC<QuotationDetailsProps> = ({ isOpen, onClos
                   onClose();
                   alert('Thank you for your order! Please complete the bank transfer to process your payment.');
                 }}
-                className="px-4 py-2 text-white bg-[#1E88E5] rounded-md hover:bg-[#0D47A1]"
+                className="px-4 py-2 text-white bg-[#1E88E5] rounded-md hover:bg-[#0D47A1] dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 Mark as Paid
               </button>

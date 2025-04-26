@@ -342,74 +342,70 @@ export default function DashboardHome() {
       <div className="col-span-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
           {/* Quotation Pending Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <PaperPlaneIcon className="text-[#0D47A1] size-6" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <PaperPlaneIcon className="text-[#0D47A1] dark:text-blue-400 size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Quotation Pending
                 </span>
-                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] dark:text-blue-400 text-title-sm">
                   {metrics.pendingQuotations}
                 </h4>
               </div>
-
             </div>
           </div>
 
           {/* Active Shipments Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <BoxIconLine className="text-[#0D47A1] size-6" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <BoxIconLine className="text-[#0D47A1] dark:text-blue-400 size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Active Shipments
                 </span>
-                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] dark:text-blue-400 text-title-sm">
                   {metrics.activeShipments}
                 </h4>
               </div>
-
             </div>
           </div>
 
           {/* Delivered Products Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <GroupIcon className="text-[#0D47A1] size-6" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <GroupIcon className="text-[#0D47A1] dark:text-blue-400 size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Delivered Products
                 </span>
-                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] dark:text-blue-400 text-title-sm">
                   {metrics.deliveredProducts}
                 </h4>
               </div>
-
             </div>
           </div>
 
           {/* Total Spend Metric */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl">
-              <DollarLineIcon className="text-[#0D47A1] size-6" />
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800/80 md:p-6 transition-all duration-300 transform hover:scale-105 hover:shadow-lg dark:hover:shadow-gray-700/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-[#E3F2FD] rounded-xl dark:bg-blue-900/30">
+              <DollarLineIcon className="text-[#0D47A1] dark:text-blue-400 size-6" />
             </div>
             <div className="flex items-end justify-between mt-5">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Total Spend
                 </span>
-                <h4 className="mt-2 font-bold text-[#0D47A1] text-title-sm dark:text-white/90">
+                <h4 className="mt-2 font-bold text-[#0D47A1] dark:text-blue-400 text-title-sm">
                   ${metrics.totalSpend.toLocaleString()}
                 </h4>
               </div>
-
             </div>
           </div>
         </div>
@@ -417,16 +413,16 @@ export default function DashboardHome() {
 
       {/* Recent Quotations Requests Table */}
       <div className="col-span-12">
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800/80">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
+            <h3 className="font-semibold text-[#0D47A1] dark:text-blue-400 text-base">
               Recent Quotation Requests
             </h3>
             <div className="flex flex-wrap items-center gap-3">
               <Button 
                 variant="primary" 
                 size="sm" 
-                className="bg-[#1E88E5] hover:bg-[#0D47A1]"
+                className="bg-[#1E88E5] hover:bg-[#0D47A1] dark:bg-blue-600 dark:hover:bg-blue-700"
                 onClick={openModal}
               >
                 Create New Quote
@@ -434,7 +430,7 @@ export default function DashboardHome() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD] dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
                 onClick={handleRefreshData}
                 disabled={isRefreshing}
               >
@@ -455,7 +451,7 @@ export default function DashboardHome() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD] dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
                 onClick={goToQuotationsPage}
               >
                 View All
@@ -467,7 +463,7 @@ export default function DashboardHome() {
             <div className="min-w-full">
               <Table>
                 {/* Table Header */}
-                <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                <TableHeader className="border-b border-gray-100 dark:border-gray-700">
                   <TableRow>
                     <TableCell
                       isHeader
@@ -503,29 +499,37 @@ export default function DashboardHome() {
                 </TableHeader>
 
                 {/* Table Body */}
-                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {isLoading && (
                     <TableRow>
-                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                      <TableCell className="px-5 py-4 text-gray-500 dark:text-gray-400 text-center">
                         <div className="w-full text-center">Loading latest quotations...</div>
                       </TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
                     </TableRow>
                   )}
                   
                   {!isLoading && quotationData.length === 0 && (
                     <TableRow>
-                      <TableCell className="px-5 py-4 text-gray-500 text-center">
+                      <TableCell className="px-5 py-4 text-gray-500 dark:text-gray-400 text-center">
                         <div className="w-full text-center">No quotations found</div>
                       </TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
+                      <TableCell className="hidden">&nbsp;</TableCell>
                     </TableRow>
                   )}
                   
                   {!isLoading && quotationData.map((item) => (
                     <TableRow 
                       key={item.id}
-                      className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                      className="transition-all duration-300 hover:bg-[#E3F2FD] dark:hover:bg-blue-900/20 hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
                     >
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                         {item.id}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-start">
@@ -545,15 +549,15 @@ export default function DashboardHome() {
                               </div>
                             )}
                           </div>
-                          <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                          <span className="font-medium text-gray-800 text-theme-sm dark:text-gray-200">
                             {item.product.name}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                         {item.quantity}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                      <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                         {item.date}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-start">
@@ -581,16 +585,16 @@ export default function DashboardHome() {
 
       {/* Shipment Tracking Table */}
       <div className="col-span-12">
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800/80">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
-            <h3 className="font-semibold text-[#0D47A1] text-base dark:text-white/90">
+            <h3 className="font-semibold text-[#0D47A1] dark:text-blue-400 text-base">
               Recent Shipment Tracking
             </h3>
             <div className="flex flex-wrap items-center gap-3">
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD]"
+                className="text-[#1E88E5] border-[#64B5F6] hover:bg-[#E3F2FD] dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
                 onClick={goToShipmentTrackingPage}
               >
                 View All Shipments

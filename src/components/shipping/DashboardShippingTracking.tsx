@@ -160,7 +160,7 @@ const DashboardShippingTracking: React.FC = () => {
   const renderMessage = (message: string) => {
     return (
       <TableRow>
-        <TableCell className="px-5 py-4 text-center">
+        <TableCell className="px-5 py-4 text-center text-gray-500 dark:text-gray-400">
           {message}
         </TableCell>
         <TableCell className="hidden">&nbsp;</TableCell>
@@ -176,7 +176,7 @@ const DashboardShippingTracking: React.FC = () => {
       <div className="min-w-full">
         <Table>
           {/* Table Header */}
-          <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+          <TableHeader className="border-b border-gray-100 dark:border-gray-700">
             <TableRow>
               <TableCell
                 isHeader
@@ -212,7 +212,7 @@ const DashboardShippingTracking: React.FC = () => {
           </TableHeader>
 
           {/* Table Body */}
-          <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+          <TableBody className="divide-y divide-gray-100 dark:divide-gray-700">
             {isLoading && renderMessage("Loading shipment tracking data...")}
             {!isLoading && error && renderMessage(error)}
             {!isLoading && !error && shipmentData.length === 0 && renderMessage("No shipment tracking data available")}
@@ -220,24 +220,24 @@ const DashboardShippingTracking: React.FC = () => {
             {!isLoading && !error && shipmentData.map((item) => (
               <TableRow 
                 key={item.id}
-                className="transition-all duration-300 hover:bg-[#E3F2FD] hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
+                className="transition-all duration-300 hover:bg-[#E3F2FD] dark:hover:bg-blue-900/20 hover:shadow-md cursor-pointer transform hover:translate-x-1 hover:scale-[1.01]"
               >
-                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                   {item.quotation?.quotation_id || "N/A"}
                 </TableCell>
-                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                   {item.quotation?.product_name || "Unknown Product"}
                 </TableCell>
-                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                   <div className="flex flex-col">
-                    <span className="font-medium text-[#ffb300]">{item.location || "Unknown"}</span>
-                    <span className="text-xs text-gray-500">Last updated: {formatDate(item.created_at)}</span>
+                    <span className="font-medium text-[#ffb300] dark:text-amber-400">{item.location || "Unknown"}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Last updated: {formatDate(item.created_at)}</span>
                   </div>
                 </TableCell>
-                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-white/90">
+                <TableCell className="px-5 py-4 text-gray-700 text-start text-theme-sm dark:text-gray-300">
                   <div className="flex flex-col">
-                    <span className="font-medium text-[#43a047]">{item.quotation?.shipping_country || "Unknown"}</span>
-                    <span className="text-xs text-gray-500">{item.quotation?.shipping_city || "Unknown"}</span>
+                    <span className="font-medium text-[#43a047] dark:text-green-400">{item.quotation?.shipping_country || "Unknown"}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{item.quotation?.shipping_city || "Unknown"}</span>
                   </div>
                 </TableCell>
                 <TableCell className="px-5 py-4 text-start">
