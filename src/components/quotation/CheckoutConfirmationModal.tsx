@@ -385,6 +385,16 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
       // Show success to user
       toast.success('Payment created successfully!');
       
+      // Call the onConfirm callback with the selected payment method
+      if (typeof onConfirm === 'function') {
+        try {
+          await onConfirm(selectedBank);
+        } catch (err) {
+          console.error('Error calling onConfirm callback:', err);
+          // Continue anyway
+        }
+      }
+      
       // Close modal
       if (typeof onClose === 'function') {
         try {
