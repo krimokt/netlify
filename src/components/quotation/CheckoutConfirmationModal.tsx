@@ -312,12 +312,24 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
 
   // Bypass approach: Direct payment creation without parent callbacks
   const handleDirectPayment = async (): Promise<void> => {
+    // Check for critical data first
+    if (!auth?.user?.id) {
+      console.error('No authenticated user found');
+      setErrorMessage('Authentication error. Please log in again.');
+      setIsLoading(false);
+      setIsProcessing(false);
+      return;
+    }
+    
+    if (!quotationUuid || !selectedBank || !selectedPriceOption) {
+      toast.error("Missing required information");
+      setErrorMessage('Please select a payment option and bank before proceeding.');
+      setIsLoading(false);
+      setIsProcessing(false);
+      return;
+    }
+    
     try {
-      if (!auth.user || !quotationUuid || !selectedBank || !selectedPriceOption) {
-        toast.error("Missing required information");
-        return;
-      }
-      
       setIsLoading(true);
       setIsProcessing(true);
       
@@ -347,6 +359,15 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
       const timestamp = Date.now().toString().slice(-6);
       const randomPart = Math.random().toString(36).substr(2, 6).toUpperCase();
       const referenceNumber = `PAY-${timestamp}-${randomPart}`;
+      
+      // Store payment info in window object for recovery
+      window.lastPaymentInfo = {
+        reference: referenceNumber,
+        method: selectedBank,
+        amount: amount,
+        quotation_id: quotationUuid,
+        timestamp: new Date().toISOString()
+      };
       
       // Create payment object
       const paymentData = {
@@ -388,7 +409,11 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
       // Call the onConfirm callback with the selected payment method
       if (typeof onConfirm === 'function') {
         try {
-          await onConfirm(selectedBank);
+          // Store payment method for global access before calling onConfirm
+          window.lastSelectedPaymentMethod = selectedBank;
+          
+          // Call onConfirm, but don't await the result to avoid dependency on parent implementation
+          onConfirm(selectedBank);
         } catch (err) {
           console.error('Error calling onConfirm callback:', err);
           // Continue anyway
@@ -582,8 +607,14 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   
-                  // Store the payment method in sessionStorage as a backup
+                  // Clear any previous error messages
+                  setErrorMessage(null);
+                  
+                  // Store the payment method in global window object for compatibility with parent components
                   if (selectedBank) {
+                    window.lastSelectedPaymentMethod = selectedBank;
+                    
+                    // Also store in sessionStorage as a backup
                     try {
                       sessionStorage.setItem('last_selected_payment_method', selectedBank);
                       console.log('Stored payment method in sessionStorage:', selectedBank);
@@ -592,15 +623,37 @@ const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps> = ({
                     }
                   }
                   
+                  // Create a timeout to reset processing state if the operation takes too long
+                  const resetTimeout = setTimeout(() => {
+                    if (isProcessing) {
+                      console.log('Payment processing timeout - resetting state');
+                      setIsProcessing(false);
+                      setIsLoading(false);
+                      setErrorMessage('The operation timed out. Please try again.');
+                    }
+                  }, 15000); // 15-second timeout
+                  
                   // Final safety wrapper to catch any uncaught errors
                   // Use setTimeout to give this click handler a chance to complete without errors
                   setTimeout(() => {
-                    handleDirectPayment().catch(error => {
-                      console.error("UNHANDLED ERROR in handleDirectPayment:", error);
-                      // Don't show alert to user, just log to console
-                      setIsProcessing(false);
-                      setIsLoading(false);
-                    });
+                    handleDirectPayment()
+                      .then(() => {
+                        // Success - clear the timeout
+                        clearTimeout(resetTimeout);
+                      })
+                      .catch(error => {
+                        // Clear the timeout since we're handling the error
+                        clearTimeout(resetTimeout);
+                        console.error("UNHANDLED ERROR in handleDirectPayment:", error);
+                        
+                        // Show a user-friendly error message
+                        setErrorMessage("There was a problem processing your payment. Please try again.");
+                        toast.error("Payment processing failed");
+                        
+                        // Reset states
+                        setIsProcessing(false);
+                        setIsLoading(false);
+                      });
                   }, 0);
                 }}
                 disabled={isProcessing || isLoading || !selectedBank || !selectedPriceOption || !quotationUuid}
