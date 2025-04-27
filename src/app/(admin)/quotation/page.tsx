@@ -686,7 +686,7 @@ export default function QuotationPage() {
         <CheckoutConfirmationModal
           isOpen={isCheckoutModalOpen}
           onClose={closeCheckoutModal}
-          onConfirm={() => handleCheckoutConfirm([selectedCheckoutQuotation], '')}
+          onConfirm={(paymentMethod) => handleCheckoutConfirm([selectedCheckoutQuotation], paymentMethod || '')}
           quotation={selectedCheckoutQuotation}
         />
       )}
