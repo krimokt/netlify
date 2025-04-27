@@ -822,7 +822,7 @@ export default function PaymentPage() {
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
-                  src="/images/banks/wise.jpeg" 
+                  src="/images/banks/wise.svg" 
                   alt="Wise Bank" 
                   width={60} 
                   height={60} 
@@ -855,7 +855,7 @@ export default function PaymentPage() {
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
-                  src="/images/banks/societe.jpeg" 
+                  src="/images/banks/societe.svg" 
                   alt="Société Générale" 
                   width={60} 
                   height={60} 
@@ -889,7 +889,7 @@ export default function PaymentPage() {
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center">
                 <Image 
-                  src="/images/banks/cih.jpeg" 
+                  src="/images/banks/cih.svg" 
                   alt="CIH Bank" 
                   width={60} 
                   height={60} 
