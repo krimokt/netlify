@@ -432,6 +432,7 @@ export default function PaymentPage() {
     setCurrentPaymentId(paymentId);
     setUploadSuccess(false);
     setUploadError(null);
+    setSelectedFile(null);
     
     // Always expand the payment row
     setExpandedPayment(paymentId);
@@ -442,161 +443,137 @@ export default function PaymentPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setSelectedFile(files[0]);
+      const file = files[0];
+      setSelectedFile(file);
+      
+      // Basic validation for file type and size
+      if (!file.type.includes('image/') && !file.type.includes('application/pdf')) {
+        setUploadError("Please upload an image (JPG, PNG) or PDF file.");
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setUploadError("File size should be less than 5MB.");
+        return;
+      }
+      
+      if (!currentPaymentId) {
+        setUploadError("Payment ID is missing.");
+        return;
+      }
+      
+      // Automatically upload the file
+      setIsUploading(true);
+      setUploadError(null);
+      setUploadSuccess(false);
+      
+      try {
+        await handleUploadFile(file);
+      } catch (error) {
+        console.error("Error during automatic upload:", error);
+        setUploadError("Failed to upload the file. Please try again.");
+        setIsUploading(false);
+      }
+      
     } else {
       setSelectedFile(null);
+      setUploadSuccess(false);
+      setUploadError(null);
     }
-    setUploadSuccess(false);
-    setUploadError(null);
   };
 
-  const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  // Helper function to handle file upload
+  const handleUploadFile = async (file: File) => {
     if (!currentPaymentId) {
       setUploadError("Payment ID is missing.");
       return;
     }
 
-    if (!selectedFile) {
-      setUploadError("Please select a file to upload.");
-      return;
-    }
-    
     // Basic validation for file type and size
-    if (!selectedFile.type.includes('image/') && !selectedFile.type.includes('application/pdf')) {
+    if (!file.type.includes('image/') && !file.type.includes('application/pdf')) {
       setUploadError("Please upload an image (JPG, PNG) or PDF file.");
       return;
     }
     
-    if (selectedFile.size > 5 * 1024 * 1024) { // 5MB limit
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
       setUploadError("File size should be less than 5MB.");
       return;
     }
     
     setIsUploading(true);
     setUploadError(null);
+    setUploadSuccess(false);
     
     try {
-      // First check if user is authenticated
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
-        throw new Error("You must be logged in to upload files.");
+      // Check if payment exists and get its details
+      const { data: existingPayment, error: paymentError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('id', currentPaymentId)
+        .single();
+
+      if (paymentError) {
+        throw new Error('Payment not found');
       }
 
-      // Generate a unique filename with user ID
-      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase() || '';
-      const fileName = `${user.id}-payment-${currentPaymentId}-${Date.now()}.${fileExt}`;
-      
-      console.log("Starting file upload process...");
-      console.log("File details:", {
-        name: selectedFile.name,
-        type: selectedFile.type,
-        size: `${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`
-      });
-      
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      // Upload file to Supabase Storage
+      const timestamp = new Date().getTime();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `payment_proof_${currentPaymentId}_${timestamp}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
         .from('payment_proofs')
-        .upload(fileName, selectedFile, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: selectedFile.type
-        });
+        .upload(filePath, file);
 
       if (uploadError) {
-        console.error("Upload error:", uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
+        throw new Error('Error uploading file');
       }
 
-      if (!uploadData) {
-        throw new Error("Upload failed: No response from server");
-      }
-
-      console.log("File uploaded successfully, getting public URL...");
-      
-      // Get public URL
+      // Get the URL of the uploaded file
       const { data: urlData } = supabase.storage
         .from('payment_proofs')
-        .getPublicUrl(fileName);
+        .getPublicUrl(filePath);
 
-      if (!urlData || !urlData.publicUrl) {
-        throw new Error("Failed to generate public URL for uploaded file");
-      }
+      const fileUrl = urlData.publicUrl;
 
-      const publicUrl = urlData.publicUrl;
-      console.log("Public URL generated:", publicUrl);
-      
-      // Update payment record with proof URL
-      const { data: updateData, error: updateError } = await supabase
+      // Update payment record with proof details
+      const { error: updateError } = await supabase
         .from('payments')
         .update({
-          proof_url: publicUrl,
-          payment_proof: publicUrl,
+          proof_url: fileUrl,
           status: 'processing'
         })
-        .eq('id', currentPaymentId)
-        .select();
+        .eq('id', currentPaymentId);
 
       if (updateError) {
-        console.error("Database update error:", updateError);
-        throw new Error(`Failed to update payment record: ${updateError.message}`);
+        console.error('Supabase update error:', updateError);
+        throw new Error(`Error updating payment record: ${updateError.message}`);
       }
 
-      if (!updateData || updateData.length === 0) {
-        throw new Error("Failed to update payment record: No record was updated");
-      }
-
-      console.log("Payment record updated successfully");
-      
-      // Update local state
+      // Update the payment in the local state
       setPayments(prevPayments => 
         prevPayments.map(payment => 
           payment.id === currentPaymentId 
             ? { 
                 ...payment, 
-                status: 'processing',
-                proofUrl: publicUrl
+                proofUrl: fileUrl,
+                status: 'processing'
               } 
             : payment
         )
       );
 
-      // Update cache
-      const cachedData = getCachedData(user.id);
-      if (cachedData) {
-        cachedData.payments = cachedData.payments.map(payment => 
-          payment.id === currentPaymentId 
-            ? { 
-                ...payment, 
-                status: 'processing',
-                proofUrl: publicUrl
-              } 
-            : payment
-        );
-        saveToCache(user.id, cachedData);
-      }
-
       setUploadSuccess(true);
+      // Refresh payment data
+      fetchPayments(existingPayment.user_id);
       
-      // Reset state after success
-      setTimeout(() => {
-        setCurrentPaymentId(null);
-        setUploadSuccess(false);
-        setUploadError(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-      }, 2000);
-
     } catch (error) {
-      console.error("Error in upload process:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload payment proof.";
-      setUploadError(errorMessage);
+      console.error('Upload error:', error);
+      setUploadError(error instanceof Error ? error.message : 'An unknown error occurred');
     } finally {
       setIsUploading(false);
     }
@@ -616,7 +593,7 @@ export default function PaymentPage() {
             variant={payment.proofUrl ? "outline" : "primary"}
             size="sm"
             className={payment.proofUrl 
-              ? "w-fit mt-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+              ? "w-fit mt-1 border-blue-300 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:border-blue-500 dark:text-blue-400"
               : "w-fit mt-1 bg-[#1E88E5] hover:bg-[#0D47A1]"}
           >
             {payment.proofUrl ? "Replace Proof" : "Upload Proof"}
@@ -626,86 +603,129 @@ export default function PaymentPage() {
     }
 
     return (
-      <form onSubmit={handleUploadSubmit} className="mt-3 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-          {payment.proofUrl 
-            ? "Replace with a new payment proof:"
-            : "Please upload a screenshot or photo of your payment receipt:"}
-        </p>
+      <div className="mt-3 border rounded-lg p-5 bg-gray-50 dark:bg-gray-900 relative overflow-hidden">
+        {/* Upload instruction */}
+        <div className="mb-4">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Upload Payment Proof
+          </h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Please upload an image (JPG, PNG) or PDF file (max 5MB)
+          </p>
+        </div>
         
-        <div className="space-y-4">
-          <div className="relative">
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,application/pdf"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                onChange={handleFileChange}
-                ref={fileInputRef}
-                aria-label="Upload payment proof"
-              />
-              <div className="flex flex-col items-center">
-                <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        {/* File input area */}
+        <label 
+          htmlFor="proof" 
+          className={`
+            relative block w-full p-4 border-2 border-dashed 
+            rounded-lg text-center cursor-pointer transition-all
+            ${isUploading ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-300 hover:border-blue-400 dark:border-gray-600 dark:hover:border-blue-500'}
+            ${selectedFile ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+          `}
+        >
+          <input
+            type="file"
+            id="proof"
+            name="proof"
+            onChange={handleFileChange}
+            className="sr-only"
+            accept="image/png, image/jpeg, image/jpg, application/pdf"
+            disabled={isUploading}
+            ref={fileInputRef}
+          />
+          
+          <div className="flex flex-col items-center justify-center">
+            {!selectedFile && !isUploading && (
+              <>
+                <div className="mb-2 rounded-full bg-blue-100 dark:bg-blue-900/40 p-2 text-blue-500 dark:text-blue-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Click to select a file</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">or drag and drop</span>
+              </>
+            )}
+            
+            {selectedFile && !isUploading && (
+              <>
+                <div className="mb-2 rounded-full bg-green-100 dark:bg-green-900/40 p-2 text-green-500 dark:text-green-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-green-600 dark:text-green-400">File selected</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[240px] truncate">{selectedFile.name}</span>
+              </>
+            )}
+            
+            {isUploading && (
+              <>
+                <div className="mb-2">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Uploading...</span>
+                <div className="w-full max-w-xs bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-3">
+                  <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{width: '100%'}}></div>
+                </div>
+              </>
+            )}
+          </div>
+        </label>
+        
+        {/* File info and results */}
+        <div className="mt-4">
+          {uploadError && (
+            <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-3 mt-3 flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Click to select file or drag and drop
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Accepted formats: JPG, PNG, PDF (max 5MB)
-                </p>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-400">Upload failed</h3>
+                <div className="mt-1 text-xs text-red-700 dark:text-red-300">
+                  {uploadError}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {selectedFile ? (
-                <span>
-                  Selected: <span className="font-medium">{selectedFile.name}</span>
-                </span>
-              ) : (
-                <span>No file selected</span>
-              )}
+          {uploadSuccess && (
+            <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-3 mt-3 flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-green-800 dark:text-green-400">Upload successful</h3>
+                <div className="mt-1 text-xs text-green-700 dark:text-green-300">
+                  Your payment proof has been uploaded and is being processed.
+                </div>
+              </div>
             </div>
+          )}
+        </div>
+        
+        {/* Cancel button */}
+        {!uploadSuccess && (
+          <div className="mt-4 flex justify-end">
             <Button
-              type="submit"
-              variant="primary"
+              onClick={() => {
+                setCurrentPaymentId(null);
+                setSelectedFile(null);
+              }}
+              variant="outline"
               size="sm"
-              disabled={isUploading || !selectedFile}
-              className={
-                isUploading || !selectedFile
-                  ? "bg-blue-400 cursor-not-allowed opacity-50"
-                  : "bg-[#1E88E5] hover:bg-[#0D47A1]"
-              }
+              className="text-gray-600 border-gray-300 hover:bg-gray-50 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-gray-800"
             >
-              {isUploading ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                  Uploading...
-                </>
-              ) : (
-                "Upload Proof"
-              )}
+              Cancel
             </Button>
           </div>
-        </div>
-
-        {uploadError && (
-          <div className="mt-4 text-sm text-red-600 dark:text-red-400">
-            {uploadError}
-          </div>
         )}
-
-        {uploadSuccess && (
-          <div className="mt-4 text-sm text-green-600 dark:text-green-400 flex items-center">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
-            Upload successful!
-          </div>
-        )}
-      </form>
+      </div>
     );
   };
 
@@ -714,6 +734,8 @@ export default function PaymentPage() {
       setExpandedPayment(null);
     } else {
       setExpandedPayment(paymentId);
+      // Reset selected file when expanding to ensure correct UI state
+      setSelectedFile(null);
     }
   };
 
